@@ -1,0 +1,191 @@
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { PageHeader } from "@/components/wdas/page-header";
+import { CreateDepartmentForm } from "@/components/wdas/create-department-form";
+import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
+import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
+import { useSession } from "@/lib/wdas/role-context";
+import { wdasConfig } from "@/services/wdas-config";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Building2, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+type DeptRow = { id: string; name: string; code: string; parentDepartmentId: string | null; isActive: boolean };
+
+export const Route = createFileRoute("/config/departments")({
+  component: DepartmentManagementPage,
+});
+
+function DepartmentManagementPage() {
+  const router = useRouter();
+  const { hasRole } = useSession();
+  const qc = useQueryClient();
+  const [editDept, setEditDept] = useState<DeptRow | null>(null);
+  const [deleteDept, setDeleteDept] = useState<DeptRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCode, setEditCode] = useState("");
+  const [editActive, setEditActive] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
+  }, [hasRole, router]);
+
+  const departments = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => wdasConfig.listDepartments(),
+    enabled: hasRole("super_admin"),
+  });
+
+  if (!hasRole("super_admin")) return null;
+
+  const openEdit = (d: DeptRow) => {
+    setEditDept(d);
+    setEditName(d.name);
+    setEditCode(d.code);
+    setEditActive(d.isActive);
+  };
+
+  const saveEdit = async () => {
+    if (!editDept) return;
+    setSaving(true);
+    try {
+      await wdasConfig.updateDepartment(editDept.id, { name: editName.trim(), code: editCode.trim(), isActive: editActive });
+      toast.success("Department updated");
+      setEditDept(null);
+      departments.refetch();
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Could not update department.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <PageHeader
+        title="Department Management"
+        subtitle="Create and manage departments. Only Super Admin can access this page."
+      />
+
+      <div className="space-y-6 p-6">
+        <Card className="border-primary/20 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Building2 className="h-5 w-5 text-primary" />
+              Create department
+            </CardTitle>
+            <CardDescription>
+              Add a new department. It will appear in user assignment and workflow configuration.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateDepartmentForm onCreated={() => departments.refetch()} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Building2 className="h-5 w-5" />
+                All departments
+              </CardTitle>
+              <CardDescription>Departments currently registered in WDAS.</CardDescription>
+            </div>
+            <Badge variant="secondary">{departments.data?.length ?? 0} departments</Badge>
+          </CardHeader>
+          <CardContent className="p-0">
+            {departments.isLoading ? <LoadingState />
+              : departments.isError ? <ErrorState message="Could not load departments." onRetry={() => departments.refetch()} />
+              : !departments.data?.length ? <EmptyState title="No departments yet" />
+              : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Prefix</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {departments.data.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">{d.name}</TableCell>
+                        <TableCell><Badge variant="outline" className="font-mono">{d.code}</Badge></TableCell>
+                        <TableCell>
+   <Badge variant={d.isActive ? "outline" : "secondary"} className={d.isActive ? "border-success/30 text-success" : ""}>
+                            {d.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteDept(d)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Sheet open={!!editDept} onOpenChange={(open) => { if (!open) setEditDept(null); }}>
+        <SheetContent className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Edit department</SheetTitle>
+            <SheetDescription>Update department details.</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} disabled={saving} />
+            </div>
+            <div className="space-y-2">
+              <Label>Code</Label>
+              <Input value={editCode} onChange={(e) => setEditCode(e.target.value)} disabled={saving} className="font-mono uppercase" />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={editActive} onCheckedChange={(c) => setEditActive(c === true)} disabled={saving} />
+              Active
+            </label>
+          </div>
+          <SheetFooter>
+            <Button variant="outline" onClick={() => setEditDept(null)} disabled={saving}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={saving || !editName.trim() || !editCode.trim()}>{saving ? "Saving…" : "Save"}</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      <ConfirmDialog
+        open={!!deleteDept}
+        onOpenChange={(open) => { if (!open) setDeleteDept(null); }}
+        title="Delete this department?"
+        description={deleteDept ? `${deleteDept.name} will be deactivated.` : ""}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={async () => {
+          if (!deleteDept) return;
+          await wdasConfig.deleteDepartment(deleteDept.id);
+          toast.success("Department deleted");
+          setDeleteDept(null);
+          departments.refetch();
+          qc.invalidateQueries({ queryKey: ["departments"] });
+        }}
+      />
+    </div>
+  );
+}
