@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { UserPlus, Users, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ActiveStatusBadge, ActiveStatusFilter, ActiveStatusSwitch, matchesActiveFilter, type ActiveFilter } from "@/components/wdas/active-status";
 
 export const Route = createFileRoute("/config/users")({
   component: UserManagementPage,
@@ -28,6 +29,7 @@ function UserManagementPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
 
   useEffect(() => {
     if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
@@ -40,6 +42,20 @@ function UserManagementPage() {
   });
 
   if (!hasRole("super_admin")) return null;
+
+  const filteredUsers = (users.data ?? []).filter((u) => matchesActiveFilter(u.isActive !== false, statusFilter));
+
+  const toggleUserStatus = async (u: User, isActive: boolean) => {
+    try {
+      await wdasConfig.setUserActiveStatus(u.id, isActive);
+      toast.success(isActive ? "User activated" : "User deactivated");
+      users.refetch();
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["directory"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Could not update user status.");
+    }
+  };
 
   return (
     <div>
@@ -64,12 +80,15 @@ function UserManagementPage() {
               </CardTitle>
               <CardDescription>Users currently registered in WDAS.</CardDescription>
             </div>
-            <Badge variant="secondary">{users.data?.length ?? 0} users</Badge>
+            <div className="flex items-center gap-3">
+              <ActiveStatusFilter value={statusFilter} onChange={setStatusFilter} />
+              <Badge variant="secondary">{filteredUsers.length} users</Badge>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {users.isLoading ? <LoadingState />
               : users.isError ? <ErrorState message="Could not load users." onRetry={() => users.refetch()} />
-              : !users.data?.length ? <EmptyState title="No users yet" />
+              : !filteredUsers.length ? <EmptyState title={statusFilter === "all" ? "No users yet" : "No users match this filter"} />
               : (
                 <Table>
                   <TableHeader>
@@ -79,11 +98,13 @@ function UserManagementPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Department</TableHead>
                       <TableHead>Roles</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Active</TableHead>
                       <TableHead className="w-[120px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.data.map((u) => (
+                    {filteredUsers.map((u) => (
                       <TableRow key={u.id}>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell className="font-mono text-xs">{u.username ?? u.adId}</TableCell>
@@ -95,6 +116,15 @@ function UserManagementPage() {
                               <Badge key={r} variant="outline">{r}</Badge>
                             ))}
                           </div>
+                        </TableCell>
+                        <TableCell><ActiveStatusBadge active={u.isActive !== false} /></TableCell>
+                        <TableCell>
+                          <ActiveStatusSwitch
+                            id={`user-active-${u.id}`}
+                            active={u.isActive !== false}
+                            label=""
+                            onChange={(isActive) => toggleUserStatus(u, isActive)}
+                          />
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
@@ -156,14 +186,14 @@ function UserManagementPage() {
       <ConfirmDialog
         open={!!deleteUser}
         onOpenChange={(open) => { if (!open) setDeleteUser(null); }}
-        title="Delete this user?"
-        description={deleteUser ? `${deleteUser.name} will be disabled and cannot sign in.` : ""}
-        confirmLabel="Delete user"
+        title="Deactivate this user?"
+        description={deleteUser ? `${deleteUser.name} will be deactivated and cannot sign in.` : ""}
+        confirmLabel="Deactivate"
         variant="destructive"
         onConfirm={async () => {
           if (!deleteUser) return;
           await wdasConfig.deleteUser(deleteUser.id);
-          toast.success("User deleted", { description: deleteUser.name });
+          toast.success("User deactivated", { description: deleteUser.name });
           setDeleteUser(null);
           users.refetch();
           qc.invalidateQueries({ queryKey: ["users"] });

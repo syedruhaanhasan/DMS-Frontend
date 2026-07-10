@@ -63,9 +63,9 @@ function DetailPage() {
   };
 
   const downloadArchive = async (format: "pdf" | "html") => {
-    if (!doc.refId) return;
+    if (!doc.archiveDocumentId) return;
     try {
-      await wdas.downloadArchive(doc.refId, format);
+      await wdas.downloadArchive(doc.archiveDocumentId, format);
       toast.success(format === "pdf" ? "PDF archive downloaded" : "HTML archive downloaded");
     } catch (e) { toast.error((e as Error).message); }
   };
@@ -85,7 +85,7 @@ function DetailPage() {
   const exportAuditTrail = () => {
     const payload = {
       documentId: doc.id,
-      archiveId: doc.refId,
+      archiveId: doc.archiveDocumentId ?? doc.refId,
       subject: doc.subject,
       status: doc.status,
       steps: doc.steps,
@@ -153,7 +153,7 @@ function DetailPage() {
         <div className="mx-6 mt-6 flex items-center gap-3 rounded-md border border-info/30 bg-info/10 px-4 py-3 text-sm">
           <Lock className="h-4 w-4 text-info" />
           <span className="flex-1">This document is finalized and locked. Contents are read-only and immutable.</span>
-          {doc.refId && (
+          {doc.archiveDocumentId && (
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => downloadArchive("pdf")}><Download className="mr-1.5 h-3.5 w-3.5" /> PDF</Button>
               <Button size="sm" variant="ghost" onClick={() => downloadArchive("html")}>HTML</Button>

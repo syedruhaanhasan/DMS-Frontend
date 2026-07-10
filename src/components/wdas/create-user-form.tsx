@@ -41,7 +41,7 @@ export function CreateUserForm({
 
   const departments = useQuery({
     queryKey: ["departments"],
-    queryFn: () => wdasConfig.listDepartments(),
+    queryFn: () => wdasConfig.listDepartments(true),
   });
 
   const emailError = useMemo(

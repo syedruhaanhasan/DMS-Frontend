@@ -48,7 +48,7 @@ function NewWorkflowWizard() {
 
   const departmentsQ = useQuery({
     queryKey: ["departments"],
-    queryFn: () => wdasConfig.listDepartments(),
+    queryFn: () => wdasConfig.listDepartments(true),
   });
   const workflowsQ = useQuery({
     queryKey: ["workflows"],

@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ActiveStatusBadge, ActiveStatusFilter, ActiveStatusSwitch, matchesActiveFilter, type ActiveFilter } from "@/components/wdas/active-status";
 
 type DeptRow = { id: string; name: string; code: string; parentDepartmentId: string | null; isActive: boolean };
 
@@ -34,6 +35,7 @@ function DepartmentManagementPage() {
   const [editCode, setEditCode] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
 
   useEffect(() => {
     if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
@@ -44,6 +46,19 @@ function DepartmentManagementPage() {
     queryFn: () => wdasConfig.listDepartments(),
     enabled: hasRole("super_admin"),
   });
+
+  const filteredDepartments = (departments.data ?? []).filter((d) => matchesActiveFilter(d.isActive, statusFilter));
+
+  const toggleDepartmentStatus = async (d: DeptRow, isActive: boolean) => {
+    try {
+      await wdasConfig.updateDepartment(d.id, { isActive });
+      toast.success(isActive ? "Department activated" : "Department deactivated");
+      departments.refetch();
+      qc.invalidateQueries({ queryKey: ["departments"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Could not update department status.");
+    }
+  };
 
   if (!hasRole("super_admin")) return null;
 
@@ -102,12 +117,15 @@ function DepartmentManagementPage() {
               </CardTitle>
               <CardDescription>Departments currently registered in WDAS.</CardDescription>
             </div>
-            <Badge variant="secondary">{departments.data?.length ?? 0} departments</Badge>
+            <div className="flex items-center gap-3">
+              <ActiveStatusFilter value={statusFilter} onChange={setStatusFilter} />
+              <Badge variant="secondary">{filteredDepartments.length} departments</Badge>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {departments.isLoading ? <LoadingState />
               : departments.isError ? <ErrorState message="Could not load departments." onRetry={() => departments.refetch()} />
-              : !departments.data?.length ? <EmptyState title="No departments yet" />
+              : !filteredDepartments.length ? <EmptyState title={statusFilter === "all" ? "No departments yet" : "No departments match this filter"} />
               : (
                 <Table>
                   <TableHeader>
@@ -115,18 +133,23 @@ function DepartmentManagementPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Prefix</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Active</TableHead>
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {departments.data.map((d) => (
+                    {filteredDepartments.map((d) => (
                       <TableRow key={d.id}>
                         <TableCell className="font-medium">{d.name}</TableCell>
                         <TableCell><Badge variant="outline" className="font-mono">{d.code}</Badge></TableCell>
+                        <TableCell><ActiveStatusBadge active={d.isActive} /></TableCell>
                         <TableCell>
-   <Badge variant={d.isActive ? "outline" : "secondary"} className={d.isActive ? "border-success/30 text-success" : ""}>
-                            {d.isActive ? "Active" : "Inactive"}
-                          </Badge>
+                          <ActiveStatusSwitch
+                            id={`dept-active-${d.id}`}
+                            active={d.isActive}
+                            label=""
+                            onChange={(isActive) => toggleDepartmentStatus(d, isActive)}
+                          />
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
@@ -173,14 +196,14 @@ function DepartmentManagementPage() {
       <ConfirmDialog
         open={!!deleteDept}
         onOpenChange={(open) => { if (!open) setDeleteDept(null); }}
-        title="Delete this department?"
-        description={deleteDept ? `${deleteDept.name} will be deactivated.` : ""}
-        confirmLabel="Delete"
+        title="Deactivate this department?"
+        description={deleteDept ? `${deleteDept.name} will be set to inactive.` : ""}
+        confirmLabel="Deactivate"
         variant="destructive"
         onConfirm={async () => {
           if (!deleteDept) return;
           await wdasConfig.deleteDepartment(deleteDept.id);
-          toast.success("Department deleted");
+          toast.success("Department deactivated");
           setDeleteDept(null);
           departments.refetch();
           qc.invalidateQueries({ queryKey: ["departments"] });

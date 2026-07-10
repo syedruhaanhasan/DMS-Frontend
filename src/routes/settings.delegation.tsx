@@ -58,7 +58,7 @@ function DelegationPage() {
 
   const off = async () => {
     if (!mine?.id) return;
-    await wdasConfig.deactivateDelegation(mine.id);
+    await wdasConfig.setDelegationActiveStatus(mine.id, false);
     toast.success("Delegation turned off");
     qc.invalidateQueries({ queryKey: ["delegations"] });
     setActive(false);

@@ -39,6 +39,7 @@ export interface User {
   appRole?: AppRole;
   appRoles?: AppRole[];
   status?: UserStatus;
+  isActive?: boolean;
 }
 
 /* ================= Configuration types ================= */
@@ -92,6 +93,7 @@ export interface Workflow {
   department?: Department;
   documentType?: string;
   status?: WorkflowStatus;
+  isActive?: boolean;
   version?: number;
   mode?: ApprovalMode;
   approvalSequence?: ApprovalSequence;
@@ -130,6 +132,8 @@ export interface Attachment {
 export interface Document {
   id: string;
   refId?: string;
+  recordNumber?: number;
+  archiveDocumentId?: string;
   subject: string;
   body: string;
   ownerId: string;

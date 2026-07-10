@@ -26,8 +26,14 @@ import type { ApiApprovalMode } from "@/lib/api/types";
 
 type ApiDepartment = { id: string; name: string; code: string; parentDepartmentId: string | null; isActive: boolean };
 
+function withIsActiveQuery(path: string, isActive?: boolean): string {
+  if (isActive === undefined) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}isActive=${isActive}`;
+}
+
 async function resolveDepartmentId(departmentName?: Department): Promise<string> {
-  const departments = await api.get<ApiDepartment[]>("/api/departments");
+  const departments = await api.get<ApiDepartment[]>(withIsActiveQuery("/api/departments", true));
   if (!departmentName) {
     const fallback = departments.find((d) => d.isActive) ?? departments[0];
     if (!fallback) throw new Error("No department available. Create a department under Configuration first.");
@@ -106,8 +112,11 @@ function mapDelegation(dto: ApiDelegationDto): Delegation {
   };
 }
 export const wdasConfig = {
-  listUsers: async (filter?: { department?: Department | "all"; query?: string; status?: UserStatus }): Promise<User[]> => {
-    const rows = (await api.get<ApiUserSummaryDto[]>("/api/users")).map(mapUser);
+  listUsers: async (filter?: { department?: Department | "all"; query?: string; status?: UserStatus; isActive?: boolean }): Promise<User[]> => {
+    const isActive =
+      filter?.isActive ??
+      (filter?.status === "active" ? true : filter?.status === "disabled" ? false : undefined);
+    const rows = (await api.get<ApiUserSummaryDto[]>(withIsActiveQuery("/api/users", isActive))).map(mapUser);
     let list = [...rows];
 
     if (filter?.department && filter.department !== "all") {
@@ -145,7 +154,12 @@ export const wdasConfig = {
     await api.delete(`/api/users/${userId}`);
   },
 
-  listDepartments: async () => api.get<ApiDepartment[]>("/api/departments"),
+  setUserActiveStatus: async (userId: string, isActive: boolean) => {
+    const dto = await api.put<ApiUserSummaryDto>(`/api/users/${userId}/status`, { isActive });
+    return mapUser(dto);
+  },
+
+  listDepartments: async (isActive?: boolean) => api.get<ApiDepartment[]>(withIsActiveQuery("/api/departments", isActive)),
 
   createDepartment: async (input: { name: string; code: string; parentDepartmentId?: string | null }) => {
     return api.post<{ id: string; name: string; code: string; parentDepartmentId: string | null; isActive: boolean }>("/api/departments", {
@@ -163,8 +177,11 @@ export const wdasConfig = {
     await api.delete(`/api/departments/${departmentId}`);
   },
 
-  listDocumentTypes: async (query?: string): Promise<DocumentTypeCatalogItem[]> => {
-    const qs = query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : "";
+  listDocumentTypes: async (query?: string, isActive?: boolean): Promise<DocumentTypeCatalogItem[]> => {
+    const params = new URLSearchParams();
+    if (query?.trim()) params.set("query", query.trim());
+    if (isActive !== undefined) params.set("isActive", String(isActive));
+    const qs = params.toString() ? `?${params.toString()}` : "";
     const rows = await api.get<ApiDocumentTypeDto[]>(`/api/document-types${qs}`);
     return rows.map((row) => ({
       id: row.id,
@@ -238,6 +255,13 @@ export const wdasConfig = {
     await api.delete(`/api/workflows/${workflowId}`);
   },
 
+  setWorkflowActiveStatus: async (workflowId: string, isActive: boolean) => {
+    const dto = await api.put<ApiWorkflowDto>(`/api/workflows/${workflowId}/status`, { isActive });
+    const departments = await api.get<{ id: string; name: string }[]>("/api/departments");
+    const deptName = departments.find((d) => d.id === dto.departmentId)?.name;
+    return mapWorkflow(dto, deptName);
+  },
+
   createUser: async (input: {
     username: string;
     password?: string;
@@ -263,10 +287,10 @@ export const wdasConfig = {
     return mapUser(dto);
   },
 
-  listWorkflows: async (department?: Department | "all"): Promise<Workflow[]> => {
+  listWorkflows: async (department?: Department | "all", isActive?: boolean): Promise<Workflow[]> => {
     const [rows, departments] = await Promise.all([
-      api.get<ApiWorkflowDto[]>("/api/workflows"),
-      api.get<{ id: string; name: string }[]>("/api/departments"),
+      api.get<ApiWorkflowDto[]>(withIsActiveQuery("/api/workflows", isActive)),
+      api.get<ApiDepartment[]>("/api/departments"),
     ]);
     const deptById = new Map(departments.map((d) => [d.id, d.name]));
     const mapped = rows.map((w) => mapWorkflow(w, deptById.get(w.departmentId)));
@@ -493,14 +517,20 @@ export const wdasConfig = {
   activeDelegationTo: (userId: string, list: Delegation[]): Delegation | undefined =>
     list.find((d) => d.toUserId === userId && d.active),
 
-  upsertDelegation: async (_fromUserId: string, toUserId: string, startAt: string, endAt: string, _active: boolean, autoReplyMessage?: string) => {
+  upsertDelegation: async (_fromUserId: string, toUserId: string, startAt: string, endAt: string, active: boolean, autoReplyMessage?: string) => {
     const dto = await api.post<ApiDelegationDto>("/api/delegations", {
       delegateUserId: toUserId,
       startsAtUtc: startAt,
       endsAtUtc: endAt,
       reason: null,
       autoReplyMessage: autoReplyMessage ?? null,
+      isActive: active,
     });
+    return mapDelegation(dto);
+  },
+
+  setDelegationActiveStatus: async (delegationId: string, isActive: boolean) => {
+    const dto = await api.put<ApiDelegationDto>(`/api/delegations/${delegationId}/status`, { isActive });
     return mapDelegation(dto);
   },
 

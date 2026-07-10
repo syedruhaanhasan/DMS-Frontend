@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileType, Search, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ActiveStatusBadge, ActiveStatusFilter, ActiveStatusSwitch, matchesActiveFilter, type ActiveFilter } from "@/components/wdas/active-status";
 
 export const Route = createFileRoute("/config/document-types")({
   component: DocumentTypesPage,
@@ -34,6 +35,7 @@ function DocumentTypesPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
 
   useEffect(() => {
     if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
@@ -48,13 +50,25 @@ function DocumentTypesPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = documentTypes.data ?? [];
-    if (!q) return rows;
-    return rows.filter((t) =>
+    const byStatus = rows.filter((t) => matchesActiveFilter(t.isActive, statusFilter));
+    if (!q) return byStatus;
+    return byStatus.filter((t) =>
       t.name.toLowerCase().includes(q) ||
       t.code.toLowerCase().includes(q) ||
       (t.description?.toLowerCase().includes(q) ?? false),
     );
-  }, [documentTypes.data, search]);
+  }, [documentTypes.data, search, statusFilter]);
+
+  const toggleDocumentTypeStatus = async (t: DocumentTypeCatalogItem, isActive: boolean) => {
+    try {
+      await wdasConfig.updateDocumentType(t.id, { isActive });
+      toast.success(isActive ? "Document type activated" : "Document type deactivated");
+      documentTypes.refetch();
+      qc.invalidateQueries({ queryKey: ["document-types"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Could not update document type status.");
+    }
+  };
 
   if (!hasRole("super_admin")) return null;
 
@@ -117,7 +131,9 @@ function DocumentTypesPage() {
               </CardTitle>
               <CardDescription>Search and browse registered document types.</CardDescription>
             </div>
-            <div className="relative w-full sm:max-w-xs">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <ActiveStatusFilter value={statusFilter} onChange={setStatusFilter} />
+              <div className="relative w-full sm:max-w-xs">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
@@ -125,6 +141,7 @@ function DocumentTypesPage() {
                 placeholder="Search by name or code…"
                 className="pl-9"
               />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -145,6 +162,7 @@ function DocumentTypesPage() {
                       <TableHead>Amount required</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Active</TableHead>
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -165,12 +183,15 @@ function DocumentTypesPage() {
                         </TableCell>
                         <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{t.description ?? "—"}</TableCell>
                         <TableCell>
-                          <Badge
-                            variant={t.isActive ? "outline" : "secondary"}
-                            className={t.isActive ? "border-success/30 text-success" : ""}
-                          >
-                            {t.isActive ? "Active" : "Inactive"}
-                          </Badge>
+                          <ActiveStatusBadge active={t.isActive} />
+                        </TableCell>
+                        <TableCell>
+                          <ActiveStatusSwitch
+                            id={`doctype-active-${t.id}`}
+                            active={t.isActive}
+                            label=""
+                            onChange={(isActive) => toggleDocumentTypeStatus(t, isActive)}
+                          />
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
@@ -217,14 +238,14 @@ function DocumentTypesPage() {
       <ConfirmDialog
         open={!!deleteType}
         onOpenChange={(open) => { if (!open) setDeleteType(null); }}
-        title="Delete this document type?"
-        description={deleteType ? `${deleteType.name} will be deactivated.` : ""}
-        confirmLabel="Delete"
+        title="Deactivate this document type?"
+        description={deleteType ? `${deleteType.name} will be set to inactive.` : ""}
+        confirmLabel="Deactivate"
         variant="destructive"
         onConfirm={async () => {
           if (!deleteType) return;
           await wdasConfig.deleteDocumentType(deleteType.id);
-          toast.success("Document type deleted");
+          toast.success("Document type deactivated");
           setDeleteType(null);
           documentTypes.refetch();
           qc.invalidateQueries({ queryKey: ["document-types"] });

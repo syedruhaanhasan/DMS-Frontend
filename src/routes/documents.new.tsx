@@ -48,7 +48,7 @@ function NewDoc() {
 
   const workflowsQ = useQuery({ queryKey: ["workflows"], queryFn: () => wdas.workflows() });
   const documentTypesQ = useQuery({ queryKey: ["document-types"], queryFn: () => wdasConfig.listDocumentTypes() });
-  const workflows = (workflowsQ.data ?? []).filter((w) => w.status === "active");
+  const workflows = (workflowsQ.data ?? []).filter((w) => w.isActive !== false && w.status === "active");
 
   const [subject, setSubject] = useState("");
   const [toIds, setToIds] = useState<string[]>([]);

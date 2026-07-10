@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Workflow as WorkflowIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ActiveStatusBadge, ActiveStatusFilter, ActiveStatusSwitch, matchesActiveFilter, type ActiveFilter } from "@/components/wdas/active-status";
 
 export const Route = createFileRoute("/config/workflows/")({
   component: WorkflowsPage,
@@ -24,6 +25,7 @@ function WorkflowsPage() {
   const qc = useQueryClient();
   const { role, scopeDept, viewDept, setViewDept, hasRole } = useSession();
   const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
   useEffect(() => { if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" }); }, [hasRole, router]);
 
   const q = useQuery({
@@ -38,6 +40,19 @@ function WorkflowsPage() {
     archived: "bg-muted text-muted-foreground",
   };
 
+  const filteredWorkflows = (q.data ?? []).filter((w) => matchesActiveFilter(w.isActive !== false, statusFilter));
+
+  const toggleWorkflowStatus = async (w: Workflow, isActive: boolean) => {
+    try {
+      await wdasConfig.setWorkflowActiveStatus(w.id, isActive);
+      toast.success(isActive ? "Workflow activated" : "Workflow deactivated");
+      q.refetch();
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Could not update workflow status.");
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -47,6 +62,7 @@ function WorkflowsPage() {
           <>
             {hasRole("super_admin") && (
               <div className="flex items-center gap-2">
+                <ActiveStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 <Label className="text-xs text-muted-foreground">Department</Label>
                 <Select value={viewDept ?? "all"} onValueChange={(v) => setViewDept(v as Department | "all")}>
                   <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
@@ -65,7 +81,7 @@ function WorkflowsPage() {
         <div className="rounded-md border bg-card">
           {q.isLoading ? <LoadingState />
             : q.isError ? <ErrorState message="Could not load workflows." onRetry={() => q.refetch()} />
-            : !q.data?.length ? <EmptyState icon={<WorkflowIcon className="h-8 w-8" />} title="No workflows yet" description="Create a workflow to route documents automatically." action={<Button asChild><Link to="/config/workflows/new">Create workflow</Link></Button>} />
+            : !filteredWorkflows.length ? <EmptyState icon={<WorkflowIcon className="h-8 w-8" />} title={statusFilter === "all" ? "No workflows yet" : "No workflows match this filter"} description="Create a workflow to route documents automatically." action={<Button asChild><Link to="/config/workflows/new">Create workflow</Link></Button>} />
             : (
               <Table>
                 <TableHeader>
@@ -74,13 +90,15 @@ function WorkflowsPage() {
                     <TableHead>Document Type</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Approval Mode</TableHead>
+                    <TableHead>Lifecycle</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Active</TableHead>
                     <TableHead>Version</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {q.data.map((w) => (
+                  {filteredWorkflows.map((w) => (
                     <TableRow key={w.id} className="hover:bg-muted/40">
                       <TableCell>
                         <Link to="/config/workflows/$id" params={{ id: w.id }} className="font-medium text-primary hover:underline">{w.name}</Link>
@@ -90,6 +108,15 @@ function WorkflowsPage() {
                       <TableCell><Badge variant="outline">{w.department ?? "—"}</Badge></TableCell>
                       <TableCell><Badge variant="secondary">{modeLabel[w.mode ?? "user"]}</Badge></TableCell>
                       <TableCell><Badge className={statusVariant[w.status ?? "draft"]} variant="outline">{(w.status ?? "draft").toUpperCase()}</Badge></TableCell>
+                      <TableCell><ActiveStatusBadge active={w.isActive !== false} /></TableCell>
+                      <TableCell>
+                        <ActiveStatusSwitch
+                          id={`workflow-active-${w.id}`}
+                          active={w.isActive !== false}
+                          label=""
+                          onChange={(isActive) => toggleWorkflowStatus(w, isActive)}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs">v{w.version ?? 1}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -110,17 +137,21 @@ function WorkflowsPage() {
       <ConfirmDialog
         open={!!deleteWorkflow}
         onOpenChange={(open) => { if (!open) setDeleteWorkflow(null); }}
-        title="Delete this workflow?"
-        description={deleteWorkflow ? `${deleteWorkflow.name} will be deactivated.` : ""}
-        confirmLabel="Delete"
+        title="Deactivate this workflow?"
+        description={deleteWorkflow ? `${deleteWorkflow.name} will be set to inactive. Existing documents are not affected.` : ""}
+        confirmLabel="Deactivate"
         variant="destructive"
         onConfirm={async () => {
           if (!deleteWorkflow) return;
-          await wdasConfig.deleteWorkflow(deleteWorkflow.id);
-          toast.success("Workflow deleted");
-          setDeleteWorkflow(null);
-          q.refetch();
-          qc.invalidateQueries({ queryKey: ["workflows"] });
+          try {
+            await wdasConfig.setWorkflowActiveStatus(deleteWorkflow.id, false);
+            toast.success("Workflow deactivated");
+            setDeleteWorkflow(null);
+            q.refetch();
+            qc.invalidateQueries({ queryKey: ["workflows"] });
+          } catch (err) {
+            toast.error((err as Error).message || "Could not deactivate workflow.");
+          }
         }}
       />
     </div>

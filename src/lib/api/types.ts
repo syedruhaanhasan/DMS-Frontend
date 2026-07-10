@@ -42,6 +42,7 @@ export interface ApiUserSummaryDto {
   departmentId: string;
   departmentName: string;
   roles: Array<ApiApplicationRole | number>;
+  isActive: boolean;
 }
 
 export interface ApiDepartmentDto {
@@ -120,6 +121,7 @@ export interface ApiDocumentRecipientDto {
 
 export interface ApiDocumentDto {
   id: string;
+  recordNumber: number;
   ownerUserId: string;
   ownerDisplayName: string;
   departmentId: string;
@@ -143,6 +145,7 @@ export interface ApiDocumentDto {
 
 export interface ApiDashboardDocumentItemDto {
   documentId: string;
+  recordNumber: number;
   ownerUserId?: string;
   subject: string;
   status: string;
@@ -180,6 +183,7 @@ export interface ApiSuccessMetricsDto {
 
 export interface ApiSearchResultItemDto {
   documentId: string;
+  recordNumber: number;
   archiveDocumentId: string | null;
   subject: string;
   ownerDisplayName: string;

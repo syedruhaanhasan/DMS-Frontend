@@ -23,6 +23,7 @@ import { CheckCircle2, History, FlaskConical, Save, Copy, Layers } from "lucide-
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import type { NotificationSettings } from "@/lib/wdas/types";
+import { ActiveStatusBadge, ActiveStatusSwitch } from "@/components/wdas/active-status";
 
 export const Route = createFileRoute("/config/workflows/$id")({
   component: WorkflowDetail,
@@ -121,6 +122,7 @@ function WorkflowDetail() {
         subtitle={`${w.department} · ${w.documentType} · v${w.version ?? 1} · ${w.status?.toUpperCase()}`}
         actions={
           <>
+            <ActiveStatusBadge active={w.isActive !== false} />
             <Button variant="outline" onClick={() => router.history.back()}>Back</Button>
             <Button onClick={() => setConfirmPublish(true)}><Save className="mr-1 h-4 w-4" /> Publish new version</Button>
           </>
@@ -131,6 +133,22 @@ function WorkflowDetail() {
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">Basic info</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <ActiveStatusSwitch
+                  active={w.isActive !== false}
+                  label="Workflow active (available for new documents)"
+                  onChange={async (isActive) => {
+                    try {
+                      await wdasConfig.setWorkflowActiveStatus(w.id, isActive);
+                      toast.success(isActive ? "Workflow activated" : "Workflow deactivated");
+                      q.refetch();
+                      qc.invalidateQueries({ queryKey: ["workflows"] });
+                    } catch (err) {
+                      toast.error((err as Error).message || "Could not update workflow status.");
+                    }
+                  }}
+                />
+              </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Approval routing</Label>
                 <Select

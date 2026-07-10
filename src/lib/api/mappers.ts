@@ -132,6 +132,11 @@ export function toApiApplicationRole(role: AppRole): ApiApplicationRole {
   }
 }
 
+function documentRefId(recordNumber?: number): string | undefined {
+  if (recordNumber != null && recordNumber > 0) return String(recordNumber);
+  return undefined;
+}
+
 export function mapUser(dto: ApiUserSummaryDto): User {
   return {
     id: dto.id,
@@ -142,7 +147,8 @@ export function mapUser(dto: ApiUserSummaryDto): User {
     email: dto.email,
     adId: dto.adObjectId,
     username: dto.userPrincipalName,
-    status: "active",
+    status: dto.isActive === false ? "disabled" : "active",
+    isActive: dto.isActive !== false,
     appRole: mapAppRole(dto.roles),
     appRoles: mapAppRoles(dto.roles),
   };
@@ -255,7 +261,9 @@ export function mapDocument(
     currentStepId: activeStep?.id,
     steps,
     attachments,
-    refId: dto.archiveDocumentId ?? undefined,
+    refId: documentRefId(dto.recordNumber),
+    recordNumber: dto.recordNumber,
+    archiveDocumentId: dto.archiveDocumentId ?? undefined,
     finalizedAt: dto.finalizedAtUtc ?? undefined,
     cancelReason: dto.cancellationReason ?? undefined,
   };
@@ -265,6 +273,8 @@ export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: str
   const submitted = dto.submittedAtUtc ?? new Date().toISOString();
   return {
     id: dto.documentId,
+    refId: documentRefId(dto.recordNumber),
+    recordNumber: dto.recordNumber,
     subject: dto.subject,
     body: "",
     ownerId: dto.ownerUserId ?? ownerId ?? "",
@@ -286,7 +296,9 @@ export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
   const submitted = dto.submittedAtUtc ?? new Date().toISOString();
   return {
     id: dto.documentId,
-    refId: dto.archiveDocumentId ?? undefined,
+    refId: documentRefId(dto.recordNumber),
+    recordNumber: dto.recordNumber,
+    archiveDocumentId: dto.archiveDocumentId ?? undefined,
     subject: dto.subject,
     body: dto.snippet,
     ownerId: "",
@@ -323,7 +335,12 @@ export function mapWorkflow(dto: ApiWorkflowDto, departmentName?: string): Workf
     description: dto.description ?? "",
     department: departmentName ? mapDepartment(departmentName) : undefined,
     documentType: dto.documentType,
-    status: dto.isActive && dto.activeVersion ? "active" : "draft",
+    isActive: dto.isActive,
+    status: !dto.isActive
+      ? "archived"
+      : dto.activeVersion?.state === "Active"
+        ? "active"
+        : "draft",
     version: dto.activeVersion?.versionNumber,
     mode: approvalMode,
     approvalSequence: dto.activeVersion?.approvalSequence === "Parallel" ? "parallel" : "sequential",

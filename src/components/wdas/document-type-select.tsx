@@ -32,7 +32,7 @@ export function DocumentTypeSelect({
     queryFn: () => wdasConfig.listDocumentTypes(),
   });
 
-  const types = q.data ?? [];
+  const types = (q.data ?? []).filter((t) => t.isActive);
   const selected = types.find((t) => t.code === value);
   const legacy = value && !selected ? value : undefined;
 
