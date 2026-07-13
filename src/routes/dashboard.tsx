@@ -164,30 +164,48 @@ function StandardDashboard() {
   const [subFilter, setSubFilter] = useState<import("@/lib/wdas/types").DocStatus | "all">("all");
   const myFiltered = subFilter === "all" ? mine.data ?? [] : (mine.data ?? []).filter((d) => d.status === subFilter);
 
+  const executiveSignals = showAdminMetrics && metricsQ.data
+    ? [
+        { label: "SLA compliance", value: `${metricsQ.data.slaCompliancePercent}%`, tone: "text-emerald-300" },
+        { label: "Avg cycle time", value: `${metricsQ.data.averageCycleTimeDays}d`, tone: "text-cyan-300" },
+        { label: "Adoption rate", value: `${metricsQ.data.adoptionRatePercent}%`, tone: "text-violet-300" },
+      ]
+    : [
+        { label: "Focus queue", value: `${pending.data?.length ?? 0} items`, tone: "text-sky-300" },
+        { label: "Actionable drafts", value: `${(mine.data ?? []).filter((d) => d.status === "draft").length} items`, tone: "text-cyan-300" },
+        { label: "Closed workflows", value: `${(completed.data ?? []).filter((d) => d.status === "approved").length} items`, tone: "text-emerald-300" },
+      ];
+
   const summaryCards = [
     {
       title: "Pending reviews",
       value: pending.data?.length ?? 0,
       subtitle: "Awaiting your action",
       icon: Inbox,
-      accent: "text-info",
-      bar: "bg-info",
+      accent: "text-sky-600",
+      iconClass: "border-sky-500/25 bg-sky-500/12",
+      bar: "bg-gradient-to-r from-sky-500 to-cyan-400",
+      glow: "linear-gradient(135deg, rgba(14,165,233,0.18), rgba(59,130,246,0.06))",
     },
     {
       title: "Drafts in progress",
       value: (mine.data ?? []).filter((d) => d.status === "draft").length,
       subtitle: "Owned by you",
       icon: FileText,
-      accent: "text-primary",
-      bar: "bg-primary",
+      accent: "text-violet-600",
+      iconClass: "border-violet-500/25 bg-violet-500/12",
+      bar: "bg-gradient-to-r from-violet-500 to-fuchsia-400",
+      glow: "linear-gradient(135deg, rgba(139,92,246,0.17), rgba(99,102,241,0.07))",
     },
     {
       title: "Completed this month",
       value: (completed.data ?? []).filter((d) => d.status === "approved").length,
       subtitle: "Approved and closed",
       icon: CheckCircle2,
-      accent: "text-success",
-      bar: "bg-success",
+      accent: "text-emerald-600",
+      iconClass: "border-emerald-500/25 bg-emerald-500/12",
+      bar: "bg-gradient-to-r from-emerald-500 to-lime-400",
+      glow: "linear-gradient(135deg, rgba(16,185,129,0.17), rgba(34,197,94,0.07))",
     },
   ];
 
@@ -199,6 +217,70 @@ function StandardDashboard() {
       />
       <DelegationBanner />
       <div className="page-shell">
+        <section className="relative overflow-hidden rounded-[30px] border border-border/60 bg-slate-950 p-4 text-white shadow-[0_25px_70px_-35px_rgba(15,23,42,0.8)] backdrop-blur sm:p-5">
+          <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-cyan-400/30 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-44 w-44 rounded-full bg-violet-400/20 blur-3xl" />
+          <div className="relative z-10">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="max-w-2xl">
+                <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Executive command center
+                </span>
+                <p className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Operations overview</p>
+                <p className="mt-1 text-sm text-slate-200">Executive signals and live workflow health in one polished, fast-moving workspace.</p>
+              </div>
+              <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-slate-100">
+                {showAdminMetrics ? (
+                  <Link to="/dashboard/department" className="hover:text-white">Department view →</Link>
+                ) : "Separate analytics view"}
+              </div>
+            </div>
+
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {executiveSignals.map((signal) => (
+                <div key={signal.label} className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-300">{signal.label}</p>
+                  <p className={cn("mt-2 text-2xl font-semibold tracking-tight", signal.tone)}>{signal.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              {summaryCards.map((card) => {
+                const Icon = card.icon;
+                const fillWidth = Math.min(100, Math.max(18, card.value * 12));
+                return (
+                  <Card
+                    key={card.title}
+                    className="dashboard-animated-card group relative overflow-hidden border-white/15 bg-white/5 text-white shadow-[0_15px_45px_-24px_rgba(15,23,42,0.7)]"
+                    style={{ backgroundImage: card.glow }}
+                  >
+                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0))]" />
+                    <div className="relative z-10 flex items-start justify-between p-5">
+                      <div>
+                        <p className="text-sm font-medium text-slate-200">{card.title}</p>
+                        <p className="mt-2 text-3xl font-semibold tracking-tight text-white">{card.value}</p>
+                        <p className="mt-1 text-sm text-slate-300">{card.subtitle}</p>
+                      </div>
+                      <div className={cn("rounded-xl border p-2.5 shadow-sm", card.iconClass, card.accent)}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="relative z-10 h-1 w-full bg-white/10">
+                      <div className={cn("h-1 transition-all duration-500", card.bar)} style={{ width: `${fillWidth}%` }} />
+                    </div>
+                    <div className="relative z-10 flex items-center gap-2 px-5 py-3 text-sm text-slate-200">
+                      <TrendingUp className="h-4 w-4 text-emerald-300" />
+                      <span>Steady throughput across this week</span>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         <section className="rounded-[28px] border border-border/60 bg-background/70 p-4 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.22)] backdrop-blur sm:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -232,32 +314,6 @@ function StandardDashboard() {
             </div>
           )}
           <div className="grid gap-4 lg:grid-cols-3">
-            {summaryCards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <Card key={card.title} className="dashboard-animated-card group relative overflow-hidden border-border/70 bg-gradient-to-br from-white via-card to-background/90">
-                <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 rounded-full bg-gradient-to-br from-primary/15 to-transparent blur-2xl" />
-                <div className="flex items-start justify-between p-5">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">{card.title}</p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">{card.value}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{card.subtitle}</p>
-                  </div>
-                  <div className={cn("rounded-xl border border-border/70 bg-card p-2.5 shadow-sm", card.accent)}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                </div>
-                <div className="h-1 w-full bg-muted/80">
-                  <div className={cn("h-1 transition-all duration-500", card.bar)} style={{ width: `${Math.min(100, Math.max(18, card.value * 12))}%` }} />
-                </div>
-                <div className="flex items-center gap-2 px-5 py-3 text-sm text-muted-foreground">
-                  <TrendingUp className="h-4 w-4 text-success" />
-                  <span>Steady throughput across this week</span>
-                </div>
-              </Card>
-            );
-          })}
-          </div>
           <Card className="dashboard-animated-card mt-4 border-primary/15 bg-gradient-to-br from-primary/10 via-card to-background/95 shadow-[0_20px_60px_-28px_rgba(37,99,235,0.35)]">
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
             <div className="flex items-start gap-3">
@@ -358,6 +414,7 @@ function StandardDashboard() {
             </Card>
           </div>
         </div>
+      </div>
 
         </section>
 
