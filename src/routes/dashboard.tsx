@@ -17,7 +17,7 @@ import { api } from "@/lib/api/client";
 import type { ApiVolumeTrendReportDto, ApiBottleneckReportDto, ApiSuccessMetricsDto } from "@/lib/api/types";
 import { Link } from "@tanstack/react-router";
 import { isAdminRole } from "@/lib/wdas/role-context";
-import { Building2, FileType, GitBranch, Mail, Network, UserPlus, Workflow as WorkflowIcon } from "lucide-react";
+import { Building2, FileType, GitBranch, Mail, Network, Shield, UserPlus, Workflow as WorkflowIcon } from "lucide-react";
 import { useCanFetchDocuments } from "@/lib/wdas/use-document-query";
 import {
   Area,
@@ -42,7 +42,8 @@ function SuperAdminDashboard() {
   const { user } = useSession();
 
   const configLinks = [
-    { to: "/config/users", label: "Users", description: "Create and manage user accounts and roles", icon: UserPlus },
+    { to: "/config/users", label: "Users", description: "Create and manage user accounts", icon: UserPlus },
+    { to: "/config/roles", label: "Roles", description: "View role definitions and create custom roles", icon: Shield },
     { to: "/config/departments", label: "Departments", description: "Organize teams and routing boundaries", icon: Building2 },
     { to: "/config/workflows", label: "Workflows", description: "Configure approval paths and rules", icon: WorkflowIcon },
     { to: "/config/document-types", label: "Document types", description: "Define reusable document categories", icon: FileType },

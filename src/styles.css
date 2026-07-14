@@ -182,6 +182,31 @@
   background: linear-gradient(180deg, color-mix(in oklab, var(--sidebar) 100%, transparent) 0%, color-mix(in oklab, var(--sidebar) 92%, black) 100%);
 }
 
+@utility sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--sidebar-foreground) 30%, transparent) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--sidebar-foreground) 28%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--sidebar-foreground) 42%, transparent);
+    background-clip: content-box;
+  }
+}
+
 @utility card-elevated {
   background: var(--card);
   border: 1px solid var(--border);

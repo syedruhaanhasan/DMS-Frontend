@@ -7,8 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { RoleProvider, useSession, isPathAllowedForSuperAdmin, isSuperAdmin, canAccessNavItem } from "@/lib/wdas/role-context";
-import type { Role } from "@/lib/wdas/types";
+import { RoleProvider, useSession, requiredPermissionForPath } from "@/lib/wdas/role-context";
 import { LanguageProvider } from "@/lib/wdas/language-context";
 import { ThemeProvider } from "@/lib/wdas/theme-context";
 import { UsersProvider } from "@/lib/wdas/users-context";
@@ -88,26 +87,8 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-const ROUTE_ROLES: { prefix: string; roles: Role[] }[] = [
-  { prefix: "/config", roles: ["super_admin"] },
-  { prefix: "/settings/delegation", roles: ["super_admin", "approver"] },
-  { prefix: "/dashboard/department", roles: ["dept_admin", "super_admin"] },
-  { prefix: "/inbox", roles: ["approver", "dept_admin"] },
-  { prefix: "/documents", roles: ["owner"] },
-  { prefix: "/repository", roles: ["dept_admin", "owner", "approver", "auditor"] },
-  { prefix: "/reports", roles: ["dept_admin", "auditor", "super_admin"] },
-  { prefix: "/settings", roles: ["owner", "approver", "auditor", "dept_admin"] },
-];
-
-function pathAllowedByAssignedRoles(pathname: string, availableRoles: Role[]): boolean {
-  if (pathname === "/dashboard") return true;
-  const match = ROUTE_ROLES.find((r) => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`));
-  if (!match) return true;
-  return canAccessNavItem(match.roles, availableRoles);
-}
-
 function AuthedGate() {
-  const { isAuthed, role, availableRoles } = useSession();
+  const { isAuthed, can } = useSession();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isLogin = pathname === "/login" || pathname === "/";
@@ -116,8 +97,6 @@ function AuthedGate() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    // Wait one tick so RoleProvider's rehydration effect can restore session from localStorage
-    // before we decide to bounce back to /login on a hard reload.
     const t = setTimeout(() => setHydrated(true), 0);
     return () => clearTimeout(t);
   }, []);
@@ -127,12 +106,15 @@ function AuthedGate() {
     if (!isAuthed && !isLogin) router.navigate({ to: "/login" });
     if (isAuthed && pathname === "/login") router.navigate({ to: "/dashboard" });
     if (isAuthed && pathname === "/") router.navigate({ to: "/dashboard" });
-    if (isAuthed && isSuperAdmin(role) && !isPathAllowedForSuperAdmin(pathname)) {
-      if (!pathAllowedByAssignedRoles(pathname, availableRoles)) {
+    if (isAuthed && !isLogin) {
+      // Dashboard is always the safe landing page for authenticated users.
+      if (pathname === "/dashboard") return;
+      const required = requiredPermissionForPath(pathname);
+      if (required && !can(required)) {
         router.navigate({ to: "/dashboard" });
       }
     }
-  }, [hydrated, isAuthed, isLogin, isExternal, isDesign, pathname, router, role, availableRoles]);
+  }, [hydrated, isAuthed, isLogin, isExternal, isDesign, pathname, router, can]);
 
   if (isExternal || isDesign || isLogin || !isAuthed) return <Outlet />;
   return <AppShell><Outlet /></AppShell>;

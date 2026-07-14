@@ -1,9 +1,10 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { useSession, isSuperAdmin } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import { DEPARTMENTS, APP_ROLES, type AppRole, type Department, type User } from "@/lib/wdas/types";
 import { Button } from "@/components/ui/button";
@@ -26,12 +27,12 @@ export const Route = createFileRoute("/config/directory")({
 
 function DirectoryPage() {
   const router = useRouter();
-  const { role, scopeDept, setViewDept, viewDept, hasRole } = useSession();
+  const { role, scopeDept, setViewDept, viewDept, can } = useSession();
   const qc = useQueryClient();
 
   useEffect(() => {
-    if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
-  }, [hasRole, router]);
+    if (!can(P.config.ad)) router.navigate({ to: "/dashboard" });
+  }, [can, router]);
 
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "disabled">("all");
@@ -63,7 +64,7 @@ function DirectoryPage() {
     <div>
       <PageHeader
         title="Directory (AD Users)"
-        subtitle={role === "super_admin" ? "All departments — synced from Active Directory." : `Users in ${scopeDept} — synced from Active Directory.`}
+        subtitle={role === "super_admin" ? "All departments â€” synced from Active Directory." : `Users in ${scopeDept} â€” synced from Active Directory.`}
         actions={
           <>
             {role === "super_admin" && (
@@ -78,11 +79,11 @@ function DirectoryPage() {
                 </Select>
               </div>
             )}
-            <Button onClick={doSync} disabled={syncing}>
+            <Button onClick={doSync} disabled={syncing || !can(P.config.adCheck)}>
               <RefreshCw className={syncing ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
               {syncing ? "Syncing…" : "Sync now"}
             </Button>
-            {role === "super_admin" && (
+            {can(P.config.usersMake) && (
               <Button onClick={() => setCreateOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Create user
@@ -95,7 +96,7 @@ function DirectoryPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative w-full max-w-sm">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search name, email, AD ID…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-8" />
+            <Input placeholder="Search name, email, AD IDâ€¦" value={q} onChange={(e) => setQ(e.target.value)} className="pl-8" />
           </div>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
             <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
@@ -146,7 +147,7 @@ function DirectoryPage() {
                         <TableCell className="text-xs">{u.email}</TableCell>
                         <TableCell>{u.department}</TableCell>
                         <TableCell className="text-xs">{u.designation}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{mgr?.name ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{mgr?.name ?? "â€”"}</TableCell>
                         <TableCell><Badge variant="outline">{u.appRole ?? "Maker"}</Badge></TableCell>
                         <TableCell>
                           {st === "active"

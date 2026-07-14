@@ -81,7 +81,8 @@ export function validateMatrix(bands: MatrixBand[]): string[] {
 
 interface Props {
   value: Partial<Workflow>;
-  onChange: (v: Partial<Workflow>) => void;
+  /** Pass a partial patch; parent should merge with `setState(prev => ({ ...prev, ...patch }))`. */
+  onChange: (patch: Partial<Workflow>) => void;
   showPreview?: boolean;
 }
 
@@ -100,7 +101,7 @@ export function ApprovalModeBuilder({ value, onChange, showPreview = true }: Pro
     [mode, bands, groups, approverUserIds, value.hybridFinalOwnerChoice, sample, users],
   );
 
-  const setMode = (m: ApprovalMode) => onChange({ ...value, mode: m });
+  const setMode = (m: ApprovalMode) => onChange({ mode: m });
 
   return (
     <div className="space-y-4">
@@ -151,16 +152,16 @@ export function ApprovalModeBuilder({ value, onChange, showPreview = true }: Pro
           <MatrixEditor
             bands={bands}
             groups={groups}
-            onChange={(next) => onChange({ ...value, matrixBands: next })}
+            onChange={(next) => onChange({ matrixBands: next })}
             errors={errors}
           />
-          <GroupsEditor groups={groups} onChange={(next) => onChange({ ...value, groups: next })} label="Approver steps (for matrix bands)" />
+          <GroupsEditor groups={groups} onChange={(next) => onChange({ groups: next })} label="Approver steps (for matrix bands)" />
         </>
       )}
       {mode === "user" && (
         <UsersEditor
           userIds={approverUserIds}
-          onChange={(next) => onChange({ ...value, approverUserIds: next })}
+          onChange={(next) => onChange({ approverUserIds: next })}
           isParallel={isParallel}
         />
       )}
@@ -168,7 +169,7 @@ export function ApprovalModeBuilder({ value, onChange, showPreview = true }: Pro
         <>
           <UsersEditor
             userIds={approverUserIds}
-            onChange={(next) => onChange({ ...value, approverUserIds: next })}
+            onChange={(next) => onChange({ approverUserIds: next })}
             isParallel={isParallel}
             title="Fixed approvers"
           />
@@ -176,7 +177,7 @@ export function ApprovalModeBuilder({ value, onChange, showPreview = true }: Pro
             <Switch
               id="hyb"
               checked={!!value.hybridFinalOwnerChoice}
-              onCheckedChange={(v) => onChange({ ...value, hybridFinalOwnerChoice: v })}
+              onCheckedChange={(v) => onChange({ hybridFinalOwnerChoice: v })}
             />
             <Label htmlFor="hyb" className="cursor-pointer">
               After the fixed users above, the document creator can add another approver at submission time.
@@ -441,6 +442,7 @@ function GroupsEditor({
             <div className="mb-2 flex items-center gap-2">
               <GripVertical className="h-4 w-4 text-muted-foreground" />
               <Input
+                key={g.id}
                 value={g.name}
                 onChange={(e) => update(g.id, { name: e.target.value })}
                 disabled={readOnly}

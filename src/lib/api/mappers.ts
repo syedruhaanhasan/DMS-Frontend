@@ -28,9 +28,10 @@ function daysSince(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
 }
 
-function mapDepartment(name: string): Department {
+function mapDepartment(name: string | null | undefined): Department {
+  const safe = (name ?? "").trim() || "—";
   const known: Department[] = ["Finance", "HR", "Procurement", "Legal", "Operations", "Information Technology"];
-  return (known.find((d) => d === name) ?? name) as Department;
+  return (known.find((d) => d === safe) ?? safe) as Department;
 }
 
 const API_ROLE_BY_VALUE: Record<number, ApiApplicationRole> = {
@@ -42,11 +43,13 @@ const API_ROLE_BY_VALUE: Record<number, ApiApplicationRole> = {
   6: "ItAdmin",
 };
 
-export function mapApiRole(role: ApiApplicationRole | number): Role {
+export function mapApiRole(role: ApiApplicationRole | number | string | { code?: string }): Role {
   const normalized =
     typeof role === "number"
       ? (API_ROLE_BY_VALUE[role] ?? "MakerOwner")
-      : role;
+      : typeof role === "object" && role && "code" in role
+        ? String(role.code ?? "MakerOwner")
+        : String(role);
 
   switch (normalized) {
     case "SuperAdmin":
@@ -64,7 +67,7 @@ export function mapApiRole(role: ApiApplicationRole | number): Role {
   }
 }
 
-export function pickPrimaryRole(roles: Array<ApiApplicationRole | number>): Role {
+export function pickPrimaryRole(roles: Array<ApiApplicationRole | number | string | { code?: string }>): Role {
   const normalized = roles.map(mapApiRole);
   const order: Role[] = ["super_admin", "dept_admin", "auditor", "approver", "owner"];
   for (const r of order) {
@@ -73,7 +76,13 @@ export function pickPrimaryRole(roles: Array<ApiApplicationRole | number>): Role
   return "owner";
 }
 
-function mapSingleAppRole(role: ApiApplicationRole | number): AppRole {
+function mapSingleAppRole(role: ApiApplicationRole | number | string | { code?: string; name?: string }): AppRole {
+  if (typeof role === "object" && role?.name) {
+    const name = role.name;
+    if (name === "Super Admin" || name === "Dept Admin" || name === "Maker" || name === "Approver" || name === "Auditor") {
+      return name === "Maker" ? "Maker" : name as AppRole;
+    }
+  }
   switch (mapApiRole(role)) {
     case "super_admin":
       return "Super Admin";
@@ -88,7 +97,7 @@ function mapSingleAppRole(role: ApiApplicationRole | number): AppRole {
   }
 }
 
-export function mapAppRole(roles: Array<ApiApplicationRole | number>): AppRole {
+export function mapAppRole(roles: Array<ApiApplicationRole | number | string | { code?: string; name?: string }>): AppRole {
   switch (pickPrimaryRole(roles)) {
     case "super_admin":
       return "Super Admin";
@@ -103,7 +112,7 @@ export function mapAppRole(roles: Array<ApiApplicationRole | number>): AppRole {
   }
 }
 
-export function mapAppRoles(roles: Array<ApiApplicationRole | number>): AppRole[] {
+export function mapAppRoles(roles: Array<ApiApplicationRole | number | string | { code?: string; name?: string }>): AppRole[] {
   const seen = new Set<AppRole>();
   const mapped: AppRole[] = [];
   for (const role of roles) {
@@ -138,6 +147,12 @@ function documentRefId(recordNumber?: number): string | undefined {
 }
 
 export function mapUser(dto: ApiUserSummaryDto): User {
+  const roleIds = Array.isArray(dto.roles)
+    ? dto.roles
+        .map((r) => (typeof r === "object" && r && "id" in r ? String((r as { id: string }).id) : null))
+        .filter((id): id is string => !!id)
+    : [];
+
   return {
     id: dto.id,
     name: dto.displayName,
@@ -149,8 +164,10 @@ export function mapUser(dto: ApiUserSummaryDto): User {
     username: dto.userPrincipalName,
     status: dto.isActive === false ? "disabled" : "active",
     isActive: dto.isActive !== false,
-    appRole: mapAppRole(dto.roles),
-    appRoles: mapAppRoles(dto.roles),
+    appRole: mapAppRole(dto.roles as never),
+    appRoles: mapAppRoles(dto.roles as never),
+    roleIds,
+    permissions: dto.permissions ?? [],
   };
 }
 

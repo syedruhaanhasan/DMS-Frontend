@@ -27,6 +27,7 @@ import { Route as DocumentsNewRouteImport } from './routes/documents.new'
 import { Route as DocumentsIdRouteImport } from './routes/documents.$id'
 import { Route as DashboardDepartmentRouteImport } from './routes/dashboard.department'
 import { Route as ConfigUsersRouteImport } from './routes/config.users'
+import { Route as ConfigRolesRouteImport } from './routes/config.roles'
 import { Route as ConfigExternalApproversRouteImport } from './routes/config.external-approvers'
 import { Route as ConfigDocumentTypesRouteImport } from './routes/config.document-types'
 import { Route as ConfigDirectoryRouteImport } from './routes/config.directory'
@@ -129,6 +130,11 @@ const ConfigUsersRoute = ConfigUsersRouteImport.update({
   path: '/config/users',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConfigRolesRoute = ConfigRolesRouteImport.update({
+  id: '/config/roles',
+  path: '/config/roles',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConfigExternalApproversRoute = ConfigExternalApproversRouteImport.update({
   id: '/config/external-approvers',
   path: '/config/external-approvers',
@@ -199,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/config/directory': typeof ConfigDirectoryRoute
   '/config/document-types': typeof ConfigDocumentTypesRoute
   '/config/external-approvers': typeof ConfigExternalApproversRoute
+  '/config/roles': typeof ConfigRolesRoute
   '/config/users': typeof ConfigUsersRoute
   '/dashboard/department': typeof DashboardDepartmentRoute
   '/documents/$id': typeof DocumentsIdRouteWithChildren
@@ -230,6 +237,7 @@ export interface FileRoutesByTo {
   '/config/directory': typeof ConfigDirectoryRoute
   '/config/document-types': typeof ConfigDocumentTypesRoute
   '/config/external-approvers': typeof ConfigExternalApproversRoute
+  '/config/roles': typeof ConfigRolesRoute
   '/config/users': typeof ConfigUsersRoute
   '/dashboard/department': typeof DashboardDepartmentRoute
   '/documents/$id': typeof DocumentsIdRouteWithChildren
@@ -262,6 +270,7 @@ export interface FileRoutesById {
   '/config/directory': typeof ConfigDirectoryRoute
   '/config/document-types': typeof ConfigDocumentTypesRoute
   '/config/external-approvers': typeof ConfigExternalApproversRoute
+  '/config/roles': typeof ConfigRolesRoute
   '/config/users': typeof ConfigUsersRoute
   '/dashboard/department': typeof DashboardDepartmentRoute
   '/documents/$id': typeof DocumentsIdRouteWithChildren
@@ -295,6 +304,7 @@ export interface FileRouteTypes {
     | '/config/directory'
     | '/config/document-types'
     | '/config/external-approvers'
+    | '/config/roles'
     | '/config/users'
     | '/dashboard/department'
     | '/documents/$id'
@@ -326,6 +336,7 @@ export interface FileRouteTypes {
     | '/config/directory'
     | '/config/document-types'
     | '/config/external-approvers'
+    | '/config/roles'
     | '/config/users'
     | '/dashboard/department'
     | '/documents/$id'
@@ -357,6 +368,7 @@ export interface FileRouteTypes {
     | '/config/directory'
     | '/config/document-types'
     | '/config/external-approvers'
+    | '/config/roles'
     | '/config/users'
     | '/dashboard/department'
     | '/documents/$id'
@@ -389,6 +401,7 @@ export interface RootRouteChildren {
   ConfigDirectoryRoute: typeof ConfigDirectoryRoute
   ConfigDocumentTypesRoute: typeof ConfigDocumentTypesRoute
   ConfigExternalApproversRoute: typeof ConfigExternalApproversRoute
+  ConfigRolesRoute: typeof ConfigRolesRoute
   ConfigUsersRoute: typeof ConfigUsersRoute
   DocumentsIdRoute: typeof DocumentsIdRouteWithChildren
   DocumentsNewRoute: typeof DocumentsNewRoute
@@ -533,6 +546,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfigUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/config/roles': {
+      id: '/config/roles'
+      path: '/config/roles'
+      fullPath: '/config/roles'
+      preLoaderRoute: typeof ConfigRolesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/config/external-approvers': {
       id: '/config/external-approvers'
       path: '/config/external-approvers'
@@ -651,6 +671,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfigDirectoryRoute: ConfigDirectoryRoute,
   ConfigDocumentTypesRoute: ConfigDocumentTypesRoute,
   ConfigExternalApproversRoute: ConfigExternalApproversRoute,
+  ConfigRolesRoute: ConfigRolesRoute,
   ConfigUsersRoute: ConfigUsersRoute,
   DocumentsIdRoute: DocumentsIdRouteWithChildren,
   DocumentsNewRoute: DocumentsNewRoute,

@@ -1,9 +1,10 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { LoadingState, ErrorState } from "@/components/wdas/data-states";
 import { useSession, isSuperAdmin } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import { ApprovalModeBuilder } from "@/components/wdas/approval-mode-builder";
 import { DocumentTypeSelect } from "@/components/wdas/document-type-select";
@@ -32,9 +33,9 @@ export const Route = createFileRoute("/config/workflows/$id")({
 function WorkflowDetail() {
   const router = useRouter();
   const { id } = Route.useParams();
-  const { role, user, hasRole } = useSession();
+  const { role, user, can } = useSession();
   const qc = useQueryClient();
-  useEffect(() => { if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" }); }, [hasRole, router]);
+  useEffect(() => { if (!can(P.config.workflows)) router.navigate({ to: "/dashboard" }); }, [can, router]);
 
   const q = useQuery({
     queryKey: ["workflow", id],
@@ -56,24 +57,57 @@ function WorkflowDetail() {
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [testAmount, setTestAmount] = useState(120000);
   const [cloneSourceId, setCloneSourceId] = useState("");
+  const [publishing, setPublishing] = useState(false);
 
-  useEffect(() => { if (q.data && !draft) setDraft(q.data); }, [q.data, draft]);
+  // Load server data into the editor once per fetch â€” do not overwrite in-progress edits.
+  useEffect(() => {
+    if (q.data && draft === null) setDraft(q.data);
+  }, [q.data, draft]);
 
-  if (q.isLoading) return <div className="p-6"><LoadingState /></div>;
+  // Reset local editor when navigating to a different workflow.
+  useEffect(() => {
+    setDraft(null);
+  }, [id]);
+
+  if (q.isLoading && !draft) return <div className="p-6"><LoadingState /></div>;
   if (q.isError || !q.data) return <div className="p-6"><ErrorState message="Workflow not found." onRetry={() => q.refetch()} /></div>;
   const w = q.data;
   const d = draft ?? w;
 
   const publish = async () => {
-    await wdasConfig.publishWorkflowVersion(w.id, {
-      name: d.name, documentType: d.documentType, department: d.department, type: d.type,
-      mode: d.mode, matrixBands: d.matrixBands, groups: d.groups, approverUserIds: d.approverUserIds, hybridFinalOwnerChoice: d.hybridFinalOwnerChoice,
-      defaultToIds: d.defaultToIds, sla: d.sla, notifications: d.notifications,
-    }, user.name, note || undefined);
-    toast.success("New version published", { description: `${w.name} v${(w.version ?? 1) + 1} is now active. In-flight documents stay on v${w.version ?? 1}.` });
-    qc.invalidateQueries({ queryKey: ["workflow", id] });
-    qc.invalidateQueries({ queryKey: ["workflows"] });
-    setNote("");
+    if (publishing) return;
+    if ((d.mode === "user" || d.mode === "hybrid") && !(d.approverUserIds?.length)) {
+      toast.error("Select at least one approver before publishing.");
+      return;
+    }
+    setPublishing(true);
+    try {
+      const saved = await wdasConfig.publishWorkflowVersion(w.id, {
+        name: d.name, documentType: d.documentType, department: d.department, type: d.type,
+        mode: d.mode, approvalSequence: d.approvalSequence,
+        matrixBands: d.matrixBands, groups: d.groups,
+        approverUserIds: d.approverUserIds ?? [],
+        hybridFinalOwnerChoice: d.hybridFinalOwnerChoice,
+        defaultToIds: d.defaultToIds, sla: d.sla, notifications: d.notifications,
+      }, user.name, note || undefined);
+      toast.success("Published", {
+        description: `${saved.name} saved with ${(saved.approverUserIds ?? []).length} approver(s).`,
+      });
+      setNote("");
+      setDraft(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["workflow", id] }),
+        qc.invalidateQueries({ queryKey: ["workflows"] }),
+        qc.invalidateQueries({ queryKey: ["workflow-versions", id] }),
+      ]);
+      const fresh = await q.refetch();
+      if (fresh.data) setDraft(fresh.data);
+    } catch (e) {
+      toast.error((e as Error).message || "Could not publish workflow.");
+    } finally {
+      setPublishing(false);
+      setConfirmPublish(false);
+    }
   };
 
   const testPreview = resolveWorkflowChain(d.mode ?? "user", { bands: d.matrixBands, groups: d.groups, approverUserIds: d.approverUserIds, hybridFinalOwnerChoice: d.hybridFinalOwnerChoice }, testAmount);
@@ -101,7 +135,7 @@ function WorkflowDetail() {
         { id: `b-${ts}-3`, min: 500001, max: null, approverGroupIds: [g3.id], sequence: "sequential" },
       ],
     });
-    toast.success("CFO executive template applied — assign group members before publishing.");
+    toast.success("CFO executive template applied â€” assign group members before publishing.");
   };
 
   const cloneMatrix = async () => {
@@ -112,19 +146,23 @@ function WorkflowDetail() {
     await wdasConfig.cloneMatrixFromWorkflow(id, cloneSourceId);
     await q.refetch();
     setDraft(null);
-    toast.success("Matrix tiers copied — reload draft from saved workflow.");
+    toast.success("Matrix tiers copied â€” reload draft from saved workflow.");
   };
 
   return (
     <div>
       <PageHeader
         title={w.name}
-        subtitle={`${w.department} · ${w.documentType} · v${w.version ?? 1} · ${w.status?.toUpperCase()}`}
+        subtitle={`${w.department} Â· ${w.documentType} Â· v${w.version ?? 1} Â· ${w.status?.toUpperCase()}`}
         actions={
           <>
             <ActiveStatusBadge active={w.isActive !== false} />
             <Button variant="outline" onClick={() => router.history.back()}>Back</Button>
-            <Button onClick={() => setConfirmPublish(true)}><Save className="mr-1 h-4 w-4" /> Publish new version</Button>
+            {can(P.config.workflowsCheck) && (
+              <Button disabled={publishing} onClick={() => setConfirmPublish(true)}>
+                <Save className="mr-1 h-4 w-4" /> {publishing ? "Publishing…" : "Publish new version"}
+              </Button>
+            )}
           </>
         }
       />
@@ -137,6 +175,7 @@ function WorkflowDetail() {
                 <ActiveStatusSwitch
                   active={w.isActive !== false}
                   label="Workflow active (available for new documents)"
+                  disabled={!can(P.config.workflowsCheck)}
                   onChange={async (isActive) => {
                     try {
                       await wdasConfig.setWorkflowActiveStatus(w.id, isActive);
@@ -157,8 +196,8 @@ function WorkflowDetail() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sequential">Sequential — approvers act one after another</SelectItem>
-                    <SelectItem value="parallel">Parallel — all approvers act at the same time</SelectItem>
+                    <SelectItem value="sequential">Sequential â€” approvers act one after another</SelectItem>
+                    <SelectItem value="parallel">Parallel â€” all approvers act at the same time</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -221,7 +260,7 @@ function WorkflowDetail() {
                     value={cloneSourceId}
                     onChange={(e) => setCloneSourceId(e.target.value)}
                   >
-                    <option value="">Select workflow…</option>
+                    <option value="">Select workflowâ€¦</option>
                     {(allWorkflowsQ.data ?? []).filter((w) => w.id !== id).map((w) => (
                       <option key={w.id} value={w.id}>{w.name} ({w.department})</option>
                     ))}
@@ -262,7 +301,7 @@ function WorkflowDetail() {
             </CardContent>
           </Card>
 
-          <ApprovalModeBuilder value={d} onChange={setDraft} />
+          <ApprovalModeBuilder value={d} onChange={(patch) => setDraft((prev) => ({ ...(prev ?? w), ...patch }))} />
 
           <Card>
             <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><FlaskConical className="h-4 w-4 text-info" /> Preview / Test Mode</CardTitle></CardHeader>
@@ -270,7 +309,7 @@ function WorkflowDetail() {
               <div className="flex items-center gap-3">
                 <Label className="text-xs text-muted-foreground">Sample amount (PKR)</Label>
                 <Input type="number" value={testAmount} onChange={(e) => setTestAmount(Number(e.target.value) || 0)} className="h-8 w-40" />
-                <p className="text-xs text-muted-foreground">No document is created — this only shows the resolved approval chain.</p>
+                <p className="text-xs text-muted-foreground">No document is created â€” this only shows the resolved approval chain.</p>
               </div>
               <ChainPreview nodes={testPreview} />
             </CardContent>
@@ -288,10 +327,10 @@ function WorkflowDetail() {
                     {v.versionNumber === w.version && <Badge className="bg-success/15 text-success" variant="outline">Current</Badge>}
                     <Badge variant="outline" className="text-xs">{v.state}</Badge>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{v.approvalMode} · SLA {v.slaThresholdHours ?? "—"}h</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{v.approvalMode} Â· SLA {v.slaThresholdHours ?? "â€”"}h</p>
                 </div>
               ))}
-              {versionsQ.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading versions…</p>}
+              {versionsQ.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading versionsâ€¦</p>}
               {!versionsQ.isLoading && !versionsQ.data?.length && (
                 <p className="p-4 text-sm text-muted-foreground">No version history yet.</p>
               )}
@@ -308,7 +347,7 @@ function WorkflowDetail() {
         extraContent={
           <div className="space-y-1.5">
             <Label>Change note (optional)</Label>
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Summary of what changed…" />
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Summary of what changedâ€¦" />
           </div>
         }
         onConfirm={publish}

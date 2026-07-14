@@ -1,7 +1,8 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { useSession } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,19 +47,19 @@ function readStoredSettings(): AdSettings {
 
 function ActiveDirectoryPage() {
   const router = useRouter();
-  const { hasRole } = useSession();
+  const { can } = useSession();
   const [settings, setSettings] = useState<AdSettings>(DEFAULT_SETTINGS);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
-  }, [hasRole, router]);
+    if (!can(P.config.ad)) router.navigate({ to: "/dashboard" });
+  }, [can, router]);
 
   useEffect(() => {
     setSettings(readStoredSettings());
   }, []);
 
-  if (!hasRole("super_admin")) return null;
+  if (!can(P.config.ad)) return null;
 
   const update = <K extends keyof AdSettings>(key: K, value: AdSettings[K]) =>
     setSettings((cur) => ({ ...cur, [key]: value }));
@@ -119,7 +120,7 @@ function ActiveDirectoryPage() {
               <Switch
                 checked={settings.enabled}
                 onCheckedChange={(v) => update("enabled", v)}
-                disabled={saving}
+                disabled={saving || !can(P.config.adMake)}
               />
             </div>
 
@@ -130,7 +131,7 @@ function ActiveDirectoryPage() {
                 value={settings.domainName}
                 onChange={(e) => update("domainName", e.target.value)}
                 placeholder="company.local"
-                disabled={saving}
+                disabled={saving || !can(P.config.adMake)}
               />
               <p className="text-xs text-muted-foreground">e.g. company.local or corp.example.com</p>
             </div>
@@ -143,7 +144,7 @@ function ActiveDirectoryPage() {
                 value={settings.port}
                 onChange={(e) => update("port", e.target.value.replace(/[^0-9]/g, ""))}
                 placeholder="389"
-                disabled={saving}
+                disabled={saving || !can(P.config.adMake)}
                 aria-invalid={!!portError}
               />
               {portError
@@ -151,9 +152,11 @@ function ActiveDirectoryPage() {
                 : <p className="text-xs text-muted-foreground">Standard LDAP is 389, LDAPS (SSL) is 636.</p>}
             </div>
 
-            <Button type="button" onClick={save} disabled={saving || !!portError}>
-              {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</> : "Save settings"}
-            </Button>
+            {can(P.config.adMake) && (
+              <Button type="button" onClick={save} disabled={saving || !!portError}>
+                {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</> : "Save settings"}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

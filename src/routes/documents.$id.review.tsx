@@ -45,7 +45,8 @@ function ReviewPage() {
     }
   }, [q.data, user.id, id, router]);
 
-  if (!canFetch || q.isPending) return <LoadingState />;
+  if (!canFetch) return <LoadingState />;
+  if (q.isLoading) return <LoadingState />;
   if (q.isError || !q.data) {
     const message = q.error instanceof ApiError ? q.error.message : "Document not available.";
     return <ErrorState message={message} onRetry={() => q.refetch()} />;

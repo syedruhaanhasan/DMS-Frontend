@@ -4,14 +4,14 @@ import {
   LayoutDashboard, Inbox, FileText, FilePlus, FolderSearch,
   BarChart3, Search, ChevronLeft, ChevronRight, LogOut, Settings,
   Workflow as WorkflowIcon, GitBranch, Mail, UserPlus, ChevronDown, UserCog, Building2, Network, FileType,
-  Sun, Moon, Sparkles, Plus, Command, BriefcaseBusiness,
+  Sun, Moon, Sparkles, Plus, Command, BriefcaseBusiness, Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSession, ROLE_LABEL, isSuperAdmin, canAccessNavItem } from "@/lib/wdas/role-context";
+import { useSession, ROLE_LABEL, isSuperAdmin } from "@/lib/wdas/role-context";
 import { useLanguage } from "@/lib/wdas/language-context";
 import { useTheme } from "@/lib/wdas/theme-context";
 import { t, type I18nKey } from "@/lib/wdas/i18n";
-import type { Role } from "@/lib/wdas/types";
+import { P } from "@/lib/wdas/permissions";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,40 +23,41 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./notification-bell";
 
-interface NavItem { to: string; labelKey: I18nKey; icon: typeof LayoutDashboard; roles: Role[]; disabled?: boolean; }
-interface NavGroup { labelKey: I18nKey; items: NavItem[]; roles: Role[]; }
+interface NavItem { to: string; labelKey: I18nKey; icon: typeof LayoutDashboard; permission: string; disabled?: boolean; }
+interface NavGroup { labelKey: I18nKey; permission: string; items: NavItem[]; }
 
 const MAIN_NAV: NavItem[] = [
-  { to: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard, roles: ["super_admin", "dept_admin", "owner", "approver", "auditor"] },
-  { to: "/dashboard/department", labelKey: "deptDashboard", icon: Building2, roles: ["dept_admin"] },
-  { to: "/inbox", labelKey: "inbox", icon: Inbox, roles: ["dept_admin", "approver"] },
-  { to: "/documents/new", labelKey: "newDocument", icon: FilePlus, roles: ["owner"] },
-  { to: "/documents", labelKey: "myDocuments", icon: FileText, roles: ["owner"] },
-  { to: "/repository", labelKey: "repository", icon: FolderSearch, roles: ["dept_admin", "owner", "approver", "auditor"] },
-  { to: "/reports", labelKey: "reports", icon: BarChart3, roles: ["dept_admin", "auditor"] },
+  { to: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard, permission: P.nav.dashboard },
+  { to: "/dashboard/department", labelKey: "deptDashboard", icon: Building2, permission: P.nav.deptDashboard },
+  { to: "/inbox", labelKey: "inbox", icon: Inbox, permission: P.nav.inbox },
+  { to: "/documents/new", labelKey: "newDocument", icon: FilePlus, permission: P.nav.documentsNew },
+  { to: "/documents", labelKey: "myDocuments", icon: FileText, permission: P.nav.documents },
+  { to: "/repository", labelKey: "repository", icon: FolderSearch, permission: P.nav.repository },
+  { to: "/reports", labelKey: "reports", icon: BarChart3, permission: P.nav.reports },
 ];
 
 const CONFIG_GROUP: NavGroup = {
   labelKey: "configuration",
-  roles: ["super_admin"],
+  permission: P.nav.config,
   items: [
-    { to: "/config/departments", labelKey: "departments", icon: Building2, roles: ["super_admin"] },
-    { to: "/config/users", labelKey: "users", icon: UserPlus, roles: ["super_admin"] },
-    { to: "/config/active-directory", labelKey: "activeDirectory", icon: Network, roles: ["super_admin"] },
-    { to: "/config/workflows", labelKey: "workflows", icon: WorkflowIcon, roles: ["super_admin"] },
-    { to: "/config/document-types", labelKey: "documentTypes", icon: FileType, roles: ["super_admin"] },
-    { to: "/config/approval-modes", labelKey: "approvalModes", icon: GitBranch, roles: ["super_admin"] },
-    { to: "/config/external-approvers", labelKey: "externalApprovers", icon: Mail, roles: ["super_admin"] },
-    { to: "/settings/delegation", labelKey: "delegation", icon: UserPlus, roles: ["super_admin"] },
+    { to: "/config/departments", labelKey: "departments", icon: Building2, permission: P.config.departments },
+    { to: "/config/users", labelKey: "users", icon: UserPlus, permission: P.config.users },
+    { to: "/config/roles", labelKey: "roles", icon: Shield, permission: P.config.roles },
+    { to: "/config/active-directory", labelKey: "activeDirectory", icon: Network, permission: P.config.ad },
+    { to: "/config/workflows", labelKey: "workflows", icon: WorkflowIcon, permission: P.config.workflows },
+    { to: "/config/document-types", labelKey: "documentTypes", icon: FileType, permission: P.config.documentTypes },
+    { to: "/config/approval-modes", labelKey: "approvalModes", icon: GitBranch, permission: P.config.approvalModes },
+    { to: "/config/external-approvers", labelKey: "externalApprovers", icon: Mail, permission: P.config.externalApprovers },
+    { to: "/settings/delegation", labelKey: "delegation", icon: UserPlus, permission: P.config.delegation },
   ],
 };
 
 const SETTINGS_GROUP: NavGroup = {
   labelKey: "settings",
-  roles: ["owner", "approver", "auditor"],
+  permission: P.nav.settings,
   items: [
-    { to: "/settings", labelKey: "account", icon: Settings, roles: ["owner", "approver", "auditor", "dept_admin"] },
-    { to: "/settings/delegation", labelKey: "delegation", icon: UserPlus, roles: ["approver"] },
+    { to: "/settings", labelKey: "account", icon: Settings, permission: P.nav.settings },
+    { to: "/settings/delegation", labelKey: "delegation", icon: UserPlus, permission: P.actions.delegationManage },
   ],
 };
 
@@ -94,7 +95,7 @@ function NavLinkItem({ item, collapsed, active, lang }: { item: NavItem; collaps
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const { role, user, setRole, signOut, availableRoles } = useSession();
+  const { role, user, setRole, signOut, availableRoles, can } = useSession();
   const { lang } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
@@ -162,15 +163,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
+        <nav className="sidebar-scroll flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
           {!collapsed && (
             <p className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/45">{t("workspace", lang)}</p>
           )}
-          {MAIN_NAV.filter((n) => canAccessNavItem(n.roles, availableRoles)).map((item) => (
+          {MAIN_NAV.filter((n) => can(n.permission)).map((item) => (
             <NavLinkItem key={item.to} item={item} collapsed={collapsed} active={isActive(item.to)} lang={lang} />
           ))}
 
-          {canAccessNavItem(CONFIG_GROUP.roles, availableRoles) && (
+          {can(CONFIG_GROUP.permission) && (
             <div className="pt-3">
               {!collapsed ? (
                 <button
@@ -187,7 +188,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
               {(configOpen || collapsed) && (
                 <div className="mt-1 space-y-0.5">
-                  {CONFIG_GROUP.items.filter((n) => canAccessNavItem(n.roles, availableRoles)).map((item) => (
+                  {CONFIG_GROUP.items.filter((n) => can(n.permission)).map((item) => (
                     <NavLinkItem key={item.to} item={item} collapsed={collapsed} active={isActive(item.to)} lang={lang} />
                   ))}
                 </div>
@@ -195,19 +196,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
 
-          {canAccessNavItem(SETTINGS_GROUP.roles, availableRoles) && (
+          {can(SETTINGS_GROUP.permission) && (
             <div className="pt-3">
               {!collapsed && (
                 <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/45">{t(SETTINGS_GROUP.labelKey, lang)}</p>
               )}
-              {SETTINGS_GROUP.items.filter((n) => canAccessNavItem(n.roles, availableRoles)).map((item) => (
+              {SETTINGS_GROUP.items.filter((n) => can(n.permission)).map((item) => (
                 <NavLinkItem key={item.to} item={item} collapsed={collapsed} active={isActive(item.to)} lang={lang} />
               ))}
             </div>
           )}
         </nav>
 
-        {!collapsed && (
+        {!collapsed && !superAdminView && (
           <div className="mx-3 mb-3 rounded-2xl border border-white/10 bg-white/6 p-3">
             <div className="mb-2 flex items-center gap-2 text-white/80">
               <Sparkles className="h-4 w-4 text-cyan-200" />
@@ -269,12 +270,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="flex-1" />
 
-          <Button asChild variant="default" size="sm" className="hidden h-9 gap-2 rounded-full bg-gradient-to-r from-primary via-indigo-500 to-cyan-500 text-white shadow-[0_10px_30px_-18px_rgba(37,99,235,0.8)] md:inline-flex">
-            <Link to="/documents/new">
-              <Plus className="h-4 w-4" />
-              Quick create
-            </Link>
-          </Button>
+          {!superAdminView && (
+            <Button asChild variant="default" size="sm" className="hidden h-9 gap-2 rounded-full bg-gradient-to-r from-primary via-indigo-500 to-cyan-500 text-white shadow-[0_10px_30px_-18px_rgba(37,99,235,0.8)] md:inline-flex">
+              <Link to="/documents/new">
+                <Plus className="h-4 w-4" />
+                Quick create
+              </Link>
+            </Button>
+          )}
 
           {availableRoles.length > 1 && (
             <DropdownMenu>

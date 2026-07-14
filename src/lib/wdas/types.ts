@@ -38,6 +38,9 @@ export interface User {
   username?: string;
   appRole?: AppRole;
   appRoles?: AppRole[];
+  /** Dynamic security role ids assigned to the user. */
+  roleIds?: string[];
+  permissions?: string[];
   status?: UserStatus;
   isActive?: boolean;
 }
@@ -66,6 +69,10 @@ export interface SlaRule {
   reminderHours: number;
   escalationHours: number;
   escalationUserId?: string;
+  /** When true, SLA thresholds are required; when false, SLA is optional. */
+  slaMandatory?: boolean;
+  /** When true, escalation is required; when false, escalation is optional. */
+  escalationMandatory?: boolean;
 }
 
 export interface NotificationSettings {

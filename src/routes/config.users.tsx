@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
@@ -7,13 +7,14 @@ import { EditUserRolesSheet } from "@/components/wdas/edit-user-roles-sheet";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { useSession } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import type { User } from "@/lib/wdas/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { UserPlus, Users, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ActiveStatusBadge, ActiveStatusFilter, ActiveStatusSwitch, matchesActiveFilter, type ActiveFilter } from "@/components/wdas/active-status";
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/config/users")({
 
 function UserManagementPage() {
   const router = useRouter();
-  const { hasRole } = useSession();
+  const { can } = useSession();
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
@@ -32,16 +33,16 @@ function UserManagementPage() {
   const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
 
   useEffect(() => {
-    if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
-  }, [hasRole, router]);
+    if (!can(P.config.users)) router.navigate({ to: "/dashboard" });
+  }, [can, router]);
 
   const users = useQuery({
     queryKey: ["user-management"],
     queryFn: () => wdasConfig.listUsers(),
-    enabled: hasRole("super_admin"),
+    enabled: can(P.config.users),
   });
 
-  if (!hasRole("super_admin")) return null;
+  if (!can(P.config.users)) return null;
 
   const filteredUsers = (users.data ?? []).filter((u) => matchesActiveFilter(u.isActive !== false, statusFilter));
 
@@ -61,12 +62,23 @@ function UserManagementPage() {
     <div>
       <PageHeader
         title="User Management"
-        subtitle="Create local or Active Directory user accounts and assign application roles. Only Super Admin can access this page."
+        subtitle="Create accounts (Maker) and assign roles or activate users (Checker)."
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Create new user
+          can(P.config.usersMake) ? (
+          <Button
+            onClick={() => setCreateOpen(true)}
+            className="group relative h-auto gap-3 overflow-hidden rounded-2xl border-0 bg-gradient-to-r from-primary via-indigo-500 to-cyan-500 px-4 py-2.5 text-white shadow-[0_12px_32px_-16px_rgba(37,99,235,0.75)] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_16px_40px_-14px_rgba(37,99,235,0.85)] active:scale-[0.98]"
+          >
+            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/25 transition-colors group-hover:bg-white/30">
+              <UserPlus className="h-4 w-4" />
+            </span>
+            <span className="relative flex flex-col items-start text-left leading-tight">
+              <span className="text-sm font-semibold tracking-tight">Create new user</span>
+              <span className="text-[11px] font-medium text-white/75">Add account & assign roles</span>
+            </span>
           </Button>
+          ) : null
         }
       />
 
@@ -119,21 +131,29 @@ function UserManagementPage() {
                         </TableCell>
                         <TableCell><ActiveStatusBadge active={u.isActive !== false} /></TableCell>
                         <TableCell>
-                          <ActiveStatusSwitch
-                            id={`user-active-${u.id}`}
-                            active={u.isActive !== false}
-                            label=""
-                            onChange={(isActive) => toggleUserStatus(u, isActive)}
-                          />
+                          {can(P.config.usersCheck) ? (
+                            <ActiveStatusSwitch
+                              id={`user-active-${u.id}`}
+                              active={u.isActive !== false}
+                              label=""
+                              onChange={(isActive) => toggleUserStatus(u, isActive)}
+                            />
+                          ) : (
+                            <ActiveStatusBadge active={u.isActive !== false} />
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditUser(u)} title="Edit roles">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteUser(u)} title="Delete user">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {can(P.config.usersCheck) && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditUser(u)} title="Edit roles">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {can(P.config.usersCheck) && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteUser(u)} title="Delete user">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -145,32 +165,29 @@ function UserManagementPage() {
         </Card>
       </div>
 
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-primary" />
               Create new user
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               Add a normal or Active Directory user account with an application role.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="py-4">
-            <CreateUserForm
-              showCancel
-              onCancel={() => setCreateOpen(false)}
-              onCreated={() => {
-                users.refetch();
-                qc.invalidateQueries({ queryKey: ["directory"] });
-                qc.invalidateQueries({ queryKey: ["users"] });
-                setCreateOpen(false);
-              }}
-            />
-          </div>
-          <SheetFooter />
-        </SheetContent>
-      </Sheet>
+            </DialogDescription>
+          </DialogHeader>
+          <CreateUserForm
+            showCancel
+            onCancel={() => setCreateOpen(false)}
+            onCreated={() => {
+              users.refetch();
+              qc.invalidateQueries({ queryKey: ["directory"] });
+              qc.invalidateQueries({ queryKey: ["users"] });
+              setCreateOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <EditUserRolesSheet
         user={editUser}

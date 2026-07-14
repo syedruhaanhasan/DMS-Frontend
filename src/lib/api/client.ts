@@ -100,7 +100,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
+    // Only clear session on auth failure — 403 is a permission denial on a valid session.
+    if (res.status === 401) {
       onUnauthorized?.();
     }
     const { message, body: errorBody } = await parseError(res);
@@ -147,7 +148,7 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
   }
 
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       onUnauthorized?.();
     }
     const { message, body: errorBody } = await parseError(res);

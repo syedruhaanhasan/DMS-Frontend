@@ -32,6 +32,12 @@ export type ApiWorkflowActionType = "Approve" | "Reject" | "Return" | "Comment" 
 
 export type ApiApprovalMode = "Matrix" | "Group" | "AdHoc" | "Hybrid";
 
+export interface ApiAssignedRoleDto {
+  id: string;
+  name: string;
+  code: string;
+}
+
 export interface ApiUserSummaryDto {
   id: string;
   adObjectId: string;
@@ -41,8 +47,34 @@ export interface ApiUserSummaryDto {
   title: string;
   departmentId: string;
   departmentName: string;
-  roles: Array<ApiApplicationRole | number>;
+  roles: ApiAssignedRoleDto[] | Array<ApiApplicationRole | number>;
+  permissions?: string[];
   isActive: boolean;
+}
+
+export interface ApiSecurityRoleSummaryDto {
+  id: string;
+  name: string;
+  code: string;
+  isSystem: boolean;
+  isActive: boolean;
+  permissionCount: number;
+}
+
+export interface ApiSecurityRoleDetailDto {
+  id: string;
+  name: string;
+  code: string;
+  description?: string | null;
+  isSystem: boolean;
+  isActive: boolean;
+  permissions: string[];
+}
+
+export interface ApiPermissionDefinitionDto {
+  key: string;
+  group: string;
+  label: string;
 }
 
 export interface ApiDepartmentDto {

@@ -117,12 +117,23 @@ export const wdas = {
   },
 
   createDocument: async (
-    input: Omit<Document, "id" | "createdAt" | "daysPending" | "sla" | "steps" | "status"> & { toNames?: string[] },
+    input: Omit<Document, "id" | "createdAt" | "daysPending" | "sla" | "steps" | "status"> & {
+      toNames?: string[];
+      /** Prefer passing the already-loaded directory users to avoid an extra full-list API call. */
+      directoryUsers?: User[];
+    },
     submit: boolean,
     pendingFiles: File[] = [],
   ): Promise<Document> => {
-    const users = await wdas.users();
+    const users = input.directoryUsers?.length ? input.directoryUsers : await wdas.users();
     const toNames = input.toNames ?? input.toIds.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean) as string[];
+    const recipients = toNames.map((name) => {
+      const u = users.find((x) => x.name === name);
+      return { recipientName: name, recipientEmail: u?.email ?? null };
+    });
+    const priority = toApiPriority(input.priority as Priority);
+    // Attachments are only allowed on drafts — create first, upload, then submit.
+    const shouldDeferSubmit = submit && pendingFiles.length > 0;
 
     const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>("/api/documents", {
       workflowId: input.workflowId,
@@ -130,29 +141,33 @@ export const wdas = {
       subject: input.subject,
       bodyHtml: input.body,
       amount: input.amount ?? null,
-      priority: toApiPriority(input.priority as Priority),
-      recipients: toNames.map((name) => {
-        const u = users.find((x) => x.name === name);
-        return { recipientName: name, recipientEmail: u?.email ?? null };
-      }),
+      priority,
+      recipients,
       adHocApproverUserIds: input.toIds,
-      submit,
+      submit: shouldDeferSubmit ? false : submit,
       idempotencyKey: null,
     });
 
-    const doc = mapDocument(dto);
+    await Promise.all(
+      pendingFiles.map(async (file) => {
+        const form = new FormData();
+        form.append("file", file);
+        await apiUpload<ApiAttachmentDto>(`/api/documents/${dto.id}/attachments`, form);
+      }),
+    );
 
-    for (const file of pendingFiles) {
-      const form = new FormData();
-      form.append("file", file);
-      await apiUpload<ApiAttachmentDto>(`/api/documents/${doc.id}/attachments`, form);
+    if (shouldDeferSubmit) {
+      const submitted = await api.post<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${dto.id}/submit`, {
+        idempotencyKey: null,
+      });
+      return mapDocument(submitted);
     }
 
     if (pendingFiles.length > 0) {
-      return wdas.getDocument(doc.id);
+      return wdas.getDocument(dto.id);
     }
 
-    return doc;
+    return mapDocument(dto);
   },
 
   uploadAttachment: async (documentId: string, file: File) => {

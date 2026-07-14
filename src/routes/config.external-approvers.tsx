@@ -1,9 +1,10 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { useSession, isSuperAdmin } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +26,9 @@ export const Route = createFileRoute("/config/external-approvers")({
 
 function ExternalApproversPage() {
   const router = useRouter();
-  const { hasRole } = useSession();
+  const { can } = useSession();
   const qc = useQueryClient();
-  useEffect(() => { if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" }); }, [hasRole, router]);
+  useEffect(() => { if (!can(P.config.externalApprovers)) router.navigate({ to: "/dashboard" }); }, [can, router]);
 
   const q = useQuery({ queryKey: ["externals"], queryFn: () => wdasConfig.listExternalApprovers() });
 
@@ -35,8 +36,8 @@ function ExternalApproversPage() {
     <div>
       <PageHeader
         title="External Approvers"
-        subtitle="Approvers outside the AD directory — email/OTP based access with expiring links."
-        actions={<AddExternalDialog onAdded={() => qc.invalidateQueries({ queryKey: ["externals"] })} />}
+        subtitle="Approvers outside the AD directory â€” email/OTP based access with expiring links."
+        actions={can(P.config.externalApproversMake) ? <AddExternalDialog onAdded={() => qc.invalidateQueries({ queryKey: ["externals"] })} /> : undefined}
       />
       <div className="p-6">
         <Card>
@@ -64,24 +65,26 @@ function ExternalApproversPage() {
                       <TableRow key={e.id}>
                         <TableCell className="font-medium">{e.name}</TableCell>
                         <TableCell className="text-xs">{e.email}</TableCell>
-                        <TableCell className="max-w-[240px] truncate text-xs">{e.documentSubject ?? "—"}</TableCell>
+                        <TableCell className="max-w-[240px] truncate text-xs">{e.documentSubject ?? "â€”"}</TableCell>
                         <TableCell className="text-xs">{relTime(e.linkSentAt)}</TableCell>
                         <TableCell className="text-xs">{relTime(e.linkExpiresAt)}</TableCell>
                         <TableCell><OtpBadge s={e.otpStatus} /></TableCell>
-                        <TableCell className="font-mono text-xs">{e.ipAddress ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">{e.ipAddress ?? "â€”"}</TableCell>
                         <TableCell>
                           {e.actionTaken === "approved" && <Badge className="border-success/30 bg-success/15 text-success" variant="outline">Approved</Badge>}
                           {e.actionTaken === "rejected" && <Badge className="border-destructive/30 bg-destructive/15 text-destructive" variant="outline">Rejected</Badge>}
                           {(!e.actionTaken || e.actionTaken === "pending") && <Badge variant="outline">Pending</Badge>}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={async () => {
-                            await wdasConfig.resendLink(e.id);
-                            toast.success("Fresh link sent", { description: `${e.email} — link valid for 7 days.` });
-                            qc.invalidateQueries({ queryKey: ["externals"] });
-                          }}>
-                            <RotateCw className="mr-1 h-3.5 w-3.5" /> Resend
-                          </Button>
+                          {can(P.config.externalApproversCheck) && (
+                            <Button variant="ghost" size="sm" onClick={async () => {
+                              await wdasConfig.resendLink(e.id);
+                              toast.success("Fresh link sent", { description: `${e.email} — link valid for 7 days.` });
+                              qc.invalidateQueries({ queryKey: ["externals"] });
+                            }}>
+                              <RotateCw className="mr-1 h-3.5 w-3.5" /> Resend
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -147,7 +150,7 @@ export function AddExternalDialog({ onAdded, trigger }: { onAdded?: () => void; 
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={submit} disabled={!canSave || busy}>{busy ? "Sending…" : "Send invitation"}</Button>
+          <Button onClick={submit} disabled={!canSave || busy}>{busy ? "Sendingâ€¦" : "Send invitation"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -42,7 +42,7 @@ const EMPTY_EDITOR_HTML = "<p><br></p>";
 
 function NewDoc() {
   const { user } = useSession();
-  const { users } = useUsers();
+  const { users, isLoading: usersLoading, isError: usersError, refetch: refetchUsers } = useUsers();
   const router = useRouter();
   const qc = useQueryClient();
 
@@ -53,6 +53,7 @@ function NewDoc() {
   const [subject, setSubject] = useState("");
   const [toIds, setToIds] = useState<string[]>([]);
   const [toQuery, setToQuery] = useState("");
+  const [toFocused, setToFocused] = useState(false);
   const [workflowId, setWorkflowId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [amountMandatory, setAmountMandatory] = useState(false);
@@ -65,6 +66,7 @@ function NewDoc() {
   const [uploading, setUploading] = useState<{ name: string; state: "uploading" | "scanning" }[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [confirm, setConfirm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [fontFamily, setFontFamily] = useState("Inter");
   const [fontSize, setFontSize] = useState("16");
   const [textColor, setTextColor] = useState("#2563eb");
@@ -156,10 +158,19 @@ function NewDoc() {
   const isValid = subject.trim() && workflowId && toIds.length > 0
     && (!amountMandatory || (amountNum != null && amountNum > 0));
 
-  const filteredUsers = users.filter(
-    (u) => u.id !== user.id && !toIds.includes(u.id) &&
-      (toQuery ? u.name.toLowerCase().includes(toQuery.toLowerCase()) || u.department.toLowerCase().includes(toQuery.toLowerCase()) : true),
-  ).slice(0, 6);
+  const filteredUsers = users.filter((u) => {
+    if (u.id === user.id || toIds.includes(u.id)) return false;
+    if (u.isActive === false) return false;
+    if (!toQuery.trim()) return true;
+    const q = toQuery.toLowerCase();
+    const name = (u.name ?? "").toLowerCase();
+    const dept = (u.department ?? "").toLowerCase();
+    const email = (u.email ?? "").toLowerCase();
+    const designation = (u.designation ?? "").toLowerCase();
+    return name.includes(q) || dept.includes(q) || email.includes(q) || designation.includes(q);
+  }).slice(0, 8);
+
+  const showApproverPicker = toFocused || toQuery.trim().length > 0;
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
@@ -172,6 +183,8 @@ function NewDoc() {
   };
 
   const submit = async (asDraft: boolean) => {
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const doc = await wdas.createDocument({
         subject: subject.trim(),
@@ -182,11 +195,19 @@ function NewDoc() {
         amount: amountNum,
         priority,
         attachments,
+        directoryUsers: users,
       }, !asDraft, pendingFiles);
       toast.success(asDraft ? "Draft saved" : "Document submitted");
-      qc.invalidateQueries();
+      // Only refresh document lists — do not invalidate the whole app cache.
+      void qc.invalidateQueries({ queryKey: ["docs"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard", "me"] });
+      setConfirm(false);
       router.navigate({ to: "/documents/$id", params: { id: doc.id } });
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const applyFormat = (cmd: string, val?: string) => {
@@ -285,7 +306,7 @@ function NewDoc() {
                       <div key={id} className="flex items-center gap-0.5">
                         <Badge variant="secondary" className="gap-1">
                           {!isParallel && <span className="text-[10px] font-semibold text-muted-foreground">{index + 1}.</span>}
-                          {u?.name}
+                          {u?.name ?? id}
                           <button type="button" onClick={() => setToIds((ids) => ids.filter((i) => i !== id))} aria-label="Remove"><X className="h-3 w-3" /></button>
                         </Badge>
                         {!isParallel && (
@@ -315,20 +336,51 @@ function NewDoc() {
                   })}
                   <input
                     className="min-w-[120px] flex-1 border-0 bg-transparent p-1 text-sm outline-none"
-                    placeholder={toIds.length ? "Add another…" : "Search users…"}
+                    placeholder={toIds.length ? "Add another…" : "Search or pick users…"}
                     value={toQuery}
                     onChange={(e) => setToQuery(e.target.value)}
+                    onFocus={() => setToFocused(true)}
+                    onBlur={() => {
+                      // Delay so click on a suggestion still registers.
+                      window.setTimeout(() => setToFocused(false), 150);
+                    }}
                   />
                 </div>
-                {toQuery && filteredUsers.length > 0 && (
-                  <div className="mt-1 rounded-md border bg-popover shadow">
-                    {filteredUsers.map((u) => (
-                      <button key={u.id} type="button" className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
-                        onClick={() => { setToIds((ids) => [...ids, u.id]); setToQuery(""); }}>
-                        <span>{u.name} <span className="text-muted-foreground">— {u.designation}</span></span>
-                        <span className="text-xs text-muted-foreground">{u.department}</span>
-                      </button>
-                    ))}
+                {showApproverPicker && (
+                  <div className="mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow">
+                    {usersLoading ? (
+                      <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading users…
+                      </p>
+                    ) : usersError ? (
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <span className="text-destructive">Could not load users.</span>
+                        <button type="button" className="text-primary hover:underline" onMouseDown={(e) => e.preventDefault()} onClick={() => refetchUsers()}>
+                          Retry
+                        </button>
+                      </div>
+                    ) : filteredUsers.length > 0 ? (
+                      filteredUsers.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setToIds((ids) => [...ids, u.id]);
+                            setToQuery("");
+                            setToFocused(true);
+                          }}
+                        >
+                          <span>{u.name} <span className="text-muted-foreground">— {u.designation || u.email}</span></span>
+                          <span className="text-xs text-muted-foreground">{u.department}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        {toQuery.trim() ? "No matching users." : "No other active users available."}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -537,8 +589,12 @@ function NewDoc() {
             <Card>
               <CardHeader><CardTitle className="text-sm">Actions</CardTitle></CardHeader>
               <CardContent className="space-y-2">
-                <Button variant="outline" className="w-full" onClick={() => submit(true)}>Save as Draft</Button>
-                <Button className="w-full" disabled={!isValid} onClick={() => setConfirm(true)}>Submit for approval</Button>
+                <Button variant="outline" className="w-full" disabled={submitting} onClick={() => submit(true)}>
+                  {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</> : "Save as Draft"}
+                </Button>
+                <Button className="w-full" disabled={!isValid || submitting} onClick={() => setConfirm(true)}>
+                  Submit for approval
+                </Button>
                 {!isValid && <p className="text-xs text-muted-foreground">Complete required fields to submit.</p>}
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
@@ -6,6 +6,7 @@ import { CreateDocumentTypeForm } from "@/components/wdas/create-document-type-f
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { useSession, isSuperAdmin } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import type { DocumentTypeCatalogItem } from "@/lib/wdas/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/config/document-types")({
 function DocumentTypesPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { role, hasRole } = useSession();
+  const { role, can } = useSession();
   const [search, setSearch] = useState("");
   const [editType, setEditType] = useState<DocumentTypeCatalogItem | null>(null);
   const [deleteType, setDeleteType] = useState<DocumentTypeCatalogItem | null>(null);
@@ -38,13 +39,13 @@ function DocumentTypesPage() {
   const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
 
   useEffect(() => {
-    if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
-  }, [role, hasRole, router]);
+    if (!can(P.config.documentTypes)) router.navigate({ to: "/dashboard" });
+  }, [can, router]);
 
   const documentTypes = useQuery({
     queryKey: ["document-types"],
     queryFn: () => wdasConfig.listDocumentTypes(),
-    enabled: hasRole("super_admin"),
+    enabled: can(P.config.documentTypes),
   });
 
   const filtered = useMemo(() => {
@@ -70,7 +71,7 @@ function DocumentTypesPage() {
     }
   };
 
-  if (!hasRole("super_admin")) return null;
+  if (!can(P.config.documentTypes)) return null;
 
   const openEdit = (t: DocumentTypeCatalogItem) => {
     setEditType(t);
@@ -107,6 +108,7 @@ function DocumentTypesPage() {
       />
 
       <div className="space-y-6 p-6">
+        {can(P.config.documentTypesMake) && (
         <Card className="border-primary/20 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -121,6 +123,7 @@ function DocumentTypesPage() {
             <CreateDocumentTypeForm onCreated={() => documentTypes.refetch()} />
           </CardContent>
         </Card>
+        )}
 
         <Card>
           <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -138,7 +141,7 @@ function DocumentTypesPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name or code…"
+                placeholder="Search by name or codeâ€¦"
                 className="pl-9"
               />
               </div>
@@ -179,24 +182,32 @@ function DocumentTypesPage() {
                         <TableCell>
                           {t.category === "financial"
                             ? <Badge variant={t.amountRequired ? "outline" : "secondary"}>{t.amountRequired ? "Yes" : "No"}</Badge>
-                            : "—"}
+                            : "â€”"}
                         </TableCell>
-                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{t.description ?? "—"}</TableCell>
+                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">{t.description ?? "â€”"}</TableCell>
                         <TableCell>
                           <ActiveStatusBadge active={t.isActive} />
                         </TableCell>
                         <TableCell>
-                          <ActiveStatusSwitch
-                            id={`doctype-active-${t.id}`}
-                            active={t.isActive}
-                            label=""
-                            onChange={(isActive) => toggleDocumentTypeStatus(t, isActive)}
-                          />
+                          {can(P.config.documentTypesCheck) ? (
+                            <ActiveStatusSwitch
+                              id={`doctype-active-${t.id}`}
+                              active={t.isActive}
+                              label=""
+                              onChange={(isActive) => toggleDocumentTypeStatus(t, isActive)}
+                            />
+                          ) : (
+                            <ActiveStatusBadge active={t.isActive} />
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteType(t)}><Trash2 className="h-4 w-4" /></Button>
+                            {can(P.config.documentTypesMake) && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}><Pencil className="h-4 w-4" /></Button>
+                            )}
+                            {can(P.config.documentTypesCheck) && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteType(t)}><Trash2 className="h-4 w-4" /></Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -230,7 +241,7 @@ function DocumentTypesPage() {
           </div>
           <SheetFooter>
             <Button variant="outline" onClick={() => setEditType(null)} disabled={saving}>Cancel</Button>
-            <Button onClick={saveEdit} disabled={saving || !editName.trim()}>{saving ? "Saving…" : "Save"}</Button>
+            <Button onClick={saveEdit} disabled={saving || !editName.trim()}>{saving ? "Savingâ€¦" : "Save"}</Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>

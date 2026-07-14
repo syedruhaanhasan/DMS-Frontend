@@ -1,8 +1,9 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/wdas/page-header";
 import { useSession, isSuperAdmin } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { ApiError, getToken } from "@/lib/api/client";
 import { wdasConfig } from "@/services/wdas-config";
 import { useUsers } from "@/lib/wdas/users-context";
@@ -17,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ApprovalModeBuilder, validateMatrix } from "@/components/wdas/approval-mode-builder";
 import { DocumentTypeSelect } from "@/components/wdas/document-type-select";
@@ -32,7 +34,12 @@ const STEPS = [
   "Basic Info", "Default To", "Approval Mode", "SLA & Escalation", "Notifications", "Review & Publish",
 ];
 
-const defaultSla: SlaRule = { reminderHours: 24, escalationHours: 72 };
+const defaultSla: SlaRule = {
+  reminderHours: 24,
+  escalationHours: 72,
+  slaMandatory: false,
+  escalationMandatory: false,
+};
 const defaultNotifications: NotificationSettings = {
   submit: { email: true, inApp: true, sms: false },
   approve: { email: true, inApp: true, sms: false },
@@ -42,9 +49,9 @@ const defaultNotifications: NotificationSettings = {
 
 function NewWorkflowWizard() {
   const router = useRouter();
-  const { role, scopeDept, user, isAuthed, hasRole } = useSession();
+  const { role, scopeDept, user, isAuthed, can } = useSession();
   const qc = useQueryClient();
-  useEffect(() => { if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" }); }, [hasRole, router]);
+  useEffect(() => { if (!can(P.config.workflowsMake)) router.navigate({ to: "/dashboard" }); }, [can, router]);
 
   const departmentsQ = useQuery({
     queryKey: ["departments"],
@@ -102,6 +109,11 @@ function NewWorkflowWizard() {
     if (step === 2 && wf.mode === "matrix") return validateMatrix(wf.matrixBands ?? []).length === 0;
     if (step === 2 && wf.mode === "user") return (wf.approverUserIds ?? []).length > 0;
     if (step === 2 && wf.mode === "hybrid") return (wf.approverUserIds ?? []).length > 0;
+    if (step === 3) {
+      const sla = wf.sla ?? defaultSla;
+      if (sla.slaMandatory && !(sla.reminderHours > 0)) return false;
+      if (sla.escalationMandatory && !(sla.escalationHours > 0)) return false;
+    }
     return true;
   })();
 
@@ -193,7 +205,7 @@ function NewWorkflowWizard() {
               />
             )}
             {step === 1 && <DefaultToStep wf={wf} setWf={setWf} />}
-            {step === 2 && <ApprovalModeBuilder value={wf} onChange={setWf} />}
+            {step === 2 && <ApprovalModeBuilder value={wf} onChange={(patch) => setWf((prev) => ({ ...prev, ...patch }))} />}
             {step === 3 && <SlaStep wf={wf} setWf={setWf} />}
             {step === 4 && <NotificationsStep wf={wf} setWf={setWf} />}
             {step === 5 && <ReviewStep wf={wf} duplicate={duplicate} />}
@@ -208,7 +220,7 @@ function NewWorkflowWizard() {
             <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
               Next <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
-          ) : (
+          ) : can(P.config.workflowsCheck) ? (
             <Button
               onClick={publish}
               disabled={publishing}
@@ -216,6 +228,8 @@ function NewWorkflowWizard() {
             >
               <CheckCircle2 className="mr-1 h-4 w-4" /> {publishing ? "Publishing…" : "Publish workflow"}
             </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Checker rights are required to publish this workflow.</p>
           )}
         </div>
       </div>
@@ -266,18 +280,8 @@ function BasicInfoStep({
         </Select>
         {lockedDept && <p className="text-xs text-muted-foreground">Scoped to your department.</p>}
         {!departmentOptions.length && (
-          <p className="text-xs text-destructive">No departments found. Create one under Configuration → Departments.</p>
+          <p className="text-xs text-destructive">No departments found. Create one under Configuration â†’ Departments.</p>
         )}
-      </div>
-      <div className="space-y-1.5">
-        <Label>Workflow type</Label>
-        <Select value={wf.type} onValueChange={(v) => setWf({ ...wf, type: v as "financial" | "non_financial" })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="financial">Financial (amount-driven)</SelectItem>
-            <SelectItem value="non_financial">Non-financial</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
       <div className="space-y-1.5">
         <Label>Approval routing</Label>
@@ -287,8 +291,8 @@ function BasicInfoStep({
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="sequential">Sequential — approvers act one after another</SelectItem>
-            <SelectItem value="parallel">Parallel — all approvers act at the same time</SelectItem>
+            <SelectItem value="sequential">Sequential â€” approvers act one after another</SelectItem>
+            <SelectItem value="parallel">Parallel â€” all approvers act at the same time</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -326,7 +330,7 @@ function DefaultToStep({ wf, setWf }: { wf: Partial<Workflow>; setWf: (v: Partia
                 active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted",
               )}
             >
-              {u.name} <span className="text-muted-foreground">· {u.department}</span>
+              {u.name} <span className="text-muted-foreground">Â· {u.department}</span>
             </button>
           );
         })}
@@ -338,29 +342,89 @@ function DefaultToStep({ wf, setWf }: { wf: Partial<Workflow>; setWf: (v: Partia
 function SlaStep({ wf, setWf }: { wf: Partial<Workflow>; setWf: (v: Partial<Workflow>) => void }) {
   const { users } = useUsers();
   const sla = wf.sla ?? defaultSla;
+  const slaMandatory = !!sla.slaMandatory;
+  const escalationMandatory = !!sla.escalationMandatory;
+  const patchSla = (patch: Partial<SlaRule>) => setWf({ ...wf, sla: { ...sla, ...patch } });
+
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      <div className="space-y-1.5">
-        <Label>Reminder after (hours)</Label>
-        <Input type="number" value={sla.reminderHours} onChange={(e) => setWf({ ...wf, sla: { ...sla, reminderHours: Number(e.target.value) || 0 } })} />
+    <div className="space-y-6">
+      <div className="space-y-3 rounded-md border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">SLA reminders</p>
+            <p className="text-xs text-muted-foreground">
+              {slaMandatory ? "Mandatory â€” reminder threshold is required." : "Optional â€” reminders can be skipped."}
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={slaMandatory}
+              onCheckedChange={(v) => patchSla({ slaMandatory: v === true })}
+            />
+            Mandatory
+          </label>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Reminder after (hours){slaMandatory ? " *" : ""}</Label>
+            <Input
+              type="number"
+              min={1}
+              disabled={!slaMandatory}
+              value={sla.reminderHours}
+              onChange={(e) => patchSla({ reminderHours: Number(e.target.value) || 0 })}
+            />
+          </div>
+        </div>
       </div>
-      <div className="space-y-1.5">
-        <Label>Escalate after (hours)</Label>
-        <Input type="number" value={sla.escalationHours} onChange={(e) => setWf({ ...wf, sla: { ...sla, escalationHours: Number(e.target.value) || 0 } })} />
+
+      <div className="space-y-3 rounded-md border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">Escalation</p>
+            <p className="text-xs text-muted-foreground">
+              {escalationMandatory ? "Mandatory â€” escalate if no action by the threshold." : "Optional â€” escalation can be disabled."}
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={escalationMandatory}
+              onCheckedChange={(v) => patchSla({ escalationMandatory: v === true })}
+            />
+            Mandatory
+          </label>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Escalate after (hours){escalationMandatory ? " *" : ""}</Label>
+            <Input
+              type="number"
+              min={1}
+              disabled={!escalationMandatory}
+              value={sla.escalationHours}
+              onChange={(e) => patchSla({ escalationHours: Number(e.target.value) || 0 })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Escalation contact</Label>
+            <Select
+              value={sla.escalationUserId ?? ""}
+              onValueChange={(v) => patchSla({ escalationUserId: v })}
+              disabled={!escalationMandatory}
+            >
+              <SelectTrigger><SelectValue placeholder="Choose user" /></SelectTrigger>
+              <SelectContent>
+                {users.map((u) => <SelectItem key={u.id} value={u.id}>{u.name} Â· {u.department}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
-      <div className="space-y-1.5">
-        <Label>Escalation contact</Label>
-        <Select value={sla.escalationUserId ?? ""} onValueChange={(v) => setWf({ ...wf, sla: { ...sla, escalationUserId: v } })}>
-          <SelectTrigger><SelectValue placeholder="Choose user" /></SelectTrigger>
-          <SelectContent>
-            {users.map((u) => <SelectItem key={u.id} value={u.id}>{u.name} · {u.department}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      <Alert className="sm:col-span-3">
+
+      <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          Reminders are sent to the current approver. If not acted upon by the escalation threshold, the escalation contact receives a heads-up.
+          Uncheck Mandatory to keep SLA or escalation optional. When mandatory, reminders go to the current approver; past the escalation threshold the escalation contact is notified.
         </AlertDescription>
       </Alert>
     </div>
@@ -393,7 +457,7 @@ function NotificationsStep({ wf, setWf }: { wf: Partial<Workflow>; setWf: (v: Pa
           ))}
         </div>
       ))}
-      <p className="p-3 text-[11px] text-muted-foreground">{channelLabel.email} / {channelLabel.inApp} / {channelLabel.sms} channels — toggle per event.</p>
+      <p className="p-3 text-[11px] text-muted-foreground">{channelLabel.email} / {channelLabel.inApp} / {channelLabel.sms} channels â€” toggle per event.</p>
     </div>
   );
 }
@@ -408,7 +472,22 @@ function ReviewStep({ wf, duplicate }: { wf: Partial<Workflow>; duplicate?: Work
         <Field label="Workflow type" value={wf.type} />
         <Field label="Approval routing" value={wf.approvalSequence === "parallel" ? "Parallel" : "Sequential"} />
         <Field label="Approval mode" value={wf.mode} />
-        <Field label="SLA" value={`Reminder ${wf.sla?.reminderHours}h · Escalate ${wf.sla?.escalationHours}h`} />
+        <Field
+          label="SLA"
+          value={
+            wf.sla?.slaMandatory
+              ? `Mandatory Â· Reminder ${wf.sla.reminderHours}h`
+              : "Optional"
+          }
+        />
+        <Field
+          label="Escalation"
+          value={
+            wf.sla?.escalationMandatory
+              ? `Mandatory Â· Escalate ${wf.sla.escalationHours}h`
+              : "Optional"
+          }
+        />
       </div>
       {duplicate ? (
         <Alert>
@@ -432,7 +511,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="rounded-md border bg-muted/30 p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-medium">{value || "—"}</p>
+      <p className="mt-0.5 font-medium">{value || "â€”"}</p>
     </div>
   );
 }

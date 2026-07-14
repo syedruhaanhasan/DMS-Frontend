@@ -11,9 +11,9 @@ import type {
   ApiWorkflowDto,
   ApiWorkflowVersionSummaryDto,
 } from "@/lib/api/types";
-import { mapUser, mapWorkflow, toApiApplicationRole } from "@/lib/api/mappers";
+import { mapUser, mapWorkflow } from "@/lib/api/mappers";
 import type {
-  AppRole,
+  ApprovalMode,
   Delegation,
   Department,
   ExternalApprover,
@@ -55,18 +55,63 @@ function normalizeApprovalMode(mode?: ApprovalMode | "group"): ApprovalMode {
   return mode ?? "user";
 }
 
+function toApiApprovalMode(mode?: ApprovalMode | "group"): ApiApprovalMode {
+  switch (normalizeApprovalMode(mode)) {
+    case "matrix":
+      return "Matrix";
+    case "user":
+      return "Group";
+    case "adhoc":
+      return "AdHoc";
+    case "hybrid":
+      return "Hybrid";
+  }
+}
+
 function buildGroupsPayload(w: Workflow) {
   const mode = normalizeApprovalMode(w.mode);
-  if (!w.groups?.length || !(mode === "hybrid" || mode === "matrix")) {
-    return undefined;
+  const payloads: {
+    name: string;
+    sequenceOrder: number;
+    requirement: "AnyOneMember" | "AllMembers";
+    memberUserIds: string[];
+  }[] = [];
+  let seq = 0;
+
+  if ((mode === "matrix" || mode === "hybrid") && w.groups?.length) {
+    for (const g of w.groups) {
+      payloads.push({
+        name: g.name,
+        sequenceOrder: ++seq,
+        requirement: g.rule === "any" ? "AnyOneMember" : "AllMembers",
+        memberUserIds: g.memberIds,
+      });
+    }
   }
 
-  return w.groups.map((g, i) => ({
-    name: g.name,
-    sequenceOrder: i + 1,
-    requirement: g.rule === "any" ? "AnyOneMember" : "AllMembers",
-    memberUserIds: g.memberIds,
-  }));
+  const userIds = w.approverUserIds ?? [];
+  if ((mode === "user" || mode === "hybrid") && userIds.length > 0) {
+    const isParallel = w.approvalSequence === "parallel";
+    if (isParallel) {
+      payloads.push({
+        name: "Approvers",
+        sequenceOrder: ++seq,
+        requirement: "AnyOneMember",
+        memberUserIds: userIds,
+      });
+    } else {
+      for (const userId of userIds) {
+        payloads.push({
+          name: `Approver ${seq + 1}`,
+          sequenceOrder: ++seq,
+          requirement: "AllMembers",
+          memberUserIds: [userId],
+        });
+      }
+    }
+  }
+
+  return payloads.length > 0 ? payloads : undefined;
 }
 
 function buildMatrixPayload(w: Workflow) {
@@ -143,11 +188,27 @@ export const wdasConfig = {
     return { updated: res.usersSynced, disabled: 0, added: 0 };
   },
 
-  updateUserRoles: async (userId: string, appRoles: AppRole[]) => {
+  updateUserRoles: async (userId: string, roleIds: string[]) => {
     const dto = await api.put<ApiUserSummaryDto>(`/api/users/${userId}/role`, {
-      roles: appRoles.map(toApiApplicationRole),
+      roleIds,
     });
     return mapUser(dto);
+  },
+
+  listRoles: async () => api.get<import("@/lib/api/types").ApiSecurityRoleSummaryDto[]>("/api/roles"),
+
+  getRole: async (id: string) => api.get<import("@/lib/api/types").ApiSecurityRoleDetailDto>(`/api/roles/${id}`),
+
+  createRole: async (input: { name: string; code?: string | null; description?: string | null; permissions: string[] }) =>
+    api.post<import("@/lib/api/types").ApiSecurityRoleDetailDto>("/api/roles", input),
+
+  updateRole: async (
+    id: string,
+    input: { name: string; description?: string | null; isActive: boolean; permissions: string[] },
+  ) => api.put<import("@/lib/api/types").ApiSecurityRoleDetailDto>(`/api/roles/${id}`, input),
+
+  deleteRole: async (id: string) => {
+    await api.delete(`/api/roles/${id}`);
   },
 
   deleteUser: async (userId: string) => {
@@ -269,7 +330,7 @@ export const wdasConfig = {
     email: string;
     title: string;
     departmentId: string;
-    roles: AppRole[];
+    roleIds: string[];
     accountType: "local" | "ad";
     adObjectId?: string;
   }) => {
@@ -280,7 +341,7 @@ export const wdasConfig = {
       email: input.email,
       title: input.title,
       departmentId: input.departmentId,
-      roles: input.roles.map(toApiApplicationRole),
+      roleIds: input.roleIds,
       accountType: input.accountType === "ad" ? "ActiveDirectory" : "Local",
       adObjectId: input.accountType === "ad" ? input.adObjectId : null,
     });
@@ -304,27 +365,37 @@ export const wdasConfig = {
     const [rows, departments, groups, tiers] = await Promise.all([
       api.get<ApiWorkflowDto[]>("/api/workflows"),
       api.get<{ id: string; name: string }[]>("/api/departments"),
-      api.get<ApiApproverGroupDto[]>(`/api/workflows/${id}/approver-groups`).catch(() => [] as ApiApproverGroupDto[]),
+      api.get<ApiApproverGroupDto[]>(`/api/workflows/${id}/approver-groups`),
       api.get<ApiMatrixTierDto[]>(`/api/workflows/${id}/matrix-tiers`).catch(() => [] as ApiMatrixTierDto[]),
     ]);
     const w = rows.find((x) => x.id === id);
     if (!w) throw new Error("Workflow not found");
     const deptName = departments.find((d) => d.id === w.departmentId)?.name;
-    const mappedGroups = groups.map((g) => ({
+    const sortedGroups = [...groups].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+    const mappedGroups = sortedGroups.map((g) => ({
       id: g.id,
       name: g.name,
-      memberIds: g.memberUserIds,
+      memberIds: g.memberUserIds ?? [],
       rule: (g.requirement === "AnyOneMember" ? "any" : "all") as import("@/lib/wdas/types").ApproverGroup["rule"],
     }));
     const mapped = mapWorkflow(w, deptName);
-    const approverUserIds = (mapped.mode === "user" || mapped.mode === "hybrid")
-      ? groups
-          .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
-          .flatMap((g) => g.memberUserIds)
-      : undefined;
+    const memberIds = mappedGroups.flatMap((g) => g.memberIds);
+
+    // User-based workflows store fixed approvers as groups (API ApprovalMode.Group).
+    // Older saves may have stored them under AdHoc — treat those as user mode so the UI shows selections.
+    let mode = mapped.mode;
+    if (memberIds.length > 0 && (mode === "adhoc" || mode === "user")) {
+      mode = "user";
+    }
+
+    const approverUserIds =
+      mode === "user" || mode === "hybrid"
+        ? memberIds
+        : undefined;
 
     return {
       ...mapped,
+      mode,
       approverUserIds,
       groups: mappedGroups,
       matrixBands: tiers.map((t) => ({
@@ -332,7 +403,7 @@ export const wdasConfig = {
         min: Number(t.minAmount),
         max: t.maxAmount != null ? Number(t.maxAmount) : null,
         approverGroupIds: mappedGroups
-          .filter((g) => g.memberIds.some((uid) => t.approverUserIds.includes(uid)))
+          .filter((g) => g.memberIds.some((uid) => (t.approverUserIds ?? []).includes(uid)))
           .map((g) => g.id),
         sequence: "sequential" as const,
       })),
@@ -345,12 +416,6 @@ export const wdasConfig = {
     const documentType = (w.documentType ?? w.name.replace(/\s+/g, "")).trim();
 
     const mode = normalizeApprovalMode(w.mode);
-    const modeMap: Record<ApprovalMode, ApiApprovalMode> = {
-      matrix: "Matrix",
-      user: "AdHoc",
-      adhoc: "AdHoc",
-      hybrid: "Hybrid",
-    };
 
     const sequenceMap = { sequential: "Sequential", parallel: "Parallel" } as const;
 
@@ -359,12 +424,16 @@ export const wdasConfig = {
       name,
       documentType,
       description: w.description?.trim() || null,
-      approvalMode: modeMap[mode],
+      approvalMode: toApiApprovalMode(mode),
       approvalSequence: sequenceMap[w.approvalSequence ?? "sequential"],
       returnResumePolicy: "RestartFromFirst",
-      slaThresholdHours: w.sla?.escalationHours ?? 48,
-      escalationEnabled: true,
-      notificationSettingsJson: w.notifications ? JSON.stringify(w.notifications) : null,
+      slaThresholdHours: w.sla?.slaMandatory || w.sla?.escalationMandatory
+        ? (w.sla.escalationMandatory ? w.sla.escalationHours : w.sla.reminderHours)
+        : null,
+      escalationEnabled: !!w.sla?.escalationMandatory,
+      notificationSettingsJson: w.notifications || w.sla
+        ? JSON.stringify({ ...(w.notifications ?? {}), sla: w.sla ?? null })
+        : null,
       groups: buildGroupsPayload(w) ?? null,
       matrixTiers: buildMatrixPayload(w) ?? null,
     });
@@ -373,14 +442,15 @@ export const wdasConfig = {
   },
 
   applyWorkflowConfiguration: async (workflowId: string, w: Workflow) => {
-    const groups = buildGroupsPayload(w);
-    const tiers = buildMatrixPayload(w);
+    const mode = normalizeApprovalMode(w.mode);
+    const groups = buildGroupsPayload(w) ?? [];
 
-    if (groups?.length) {
+    if (mode === "user" || mode === "hybrid" || mode === "matrix") {
       await api.post<ApiApproverGroupDto[]>(`/api/workflows/${workflowId}/approver-groups`, { groups });
     }
 
-    if (tiers?.length) {
+    const tiers = buildMatrixPayload(w);
+    if ((mode === "matrix" || mode === "hybrid") && tiers && tiers.length > 0) {
       await api.post<ApiMatrixTierDto[]>(`/api/workflows/${workflowId}/matrix-tiers`, { tiers });
     }
   },
@@ -397,64 +467,52 @@ export const wdasConfig = {
     });
 
     if (existing) {
-      await wdasConfig.applyWorkflowConfiguration(existing.id, w);
+      await wdasConfig.publishWorkflowVersion(existing.id, w, "system");
       return wdasConfig.getWorkflow(existing.id);
     }
 
     const created = await wdasConfig.createWorkflow(w);
+    await wdasConfig.applyWorkflowConfiguration(created.id, w);
     return wdasConfig.getWorkflow(created.id);
   },
 
   publishWorkflowVersion: async (id: string, changes: Partial<Workflow>, _publishedBy: string, _note?: string) => {
     const current = await wdasConfig.getWorkflow(id);
-    const merged = { ...current, ...changes };
-
-    const mergedMode = normalizeApprovalMode(merged.mode);
-    const modeMap: Record<ApprovalMode, ApiApprovalMode> = {
-      matrix: "Matrix",
-      user: "AdHoc",
-      adhoc: "AdHoc",
-      hybrid: "Hybrid",
+    const merged: Workflow = {
+      ...current,
+      ...changes,
+      approverUserIds: changes.approverUserIds ?? current.approverUserIds ?? [],
+      groups: changes.groups ?? current.groups ?? [],
+      matrixBands: changes.matrixBands ?? current.matrixBands ?? [],
+      approvalSequence: changes.approvalSequence ?? current.approvalSequence,
+      mode: changes.mode ?? current.mode,
     };
 
-    if (merged.groups?.length && (mergedMode === "hybrid" || mergedMode === "matrix")) {
-      await api.post<ApiApproverGroupDto[]>(`/api/workflows/${id}/approver-groups`, {
-        groups: merged.groups.map((g, i) => ({
-          name: g.name,
-          sequenceOrder: i + 1,
-          requirement: g.rule === "any" ? "AnyOneMember" : "AllMembers",
-          memberUserIds: g.memberIds,
-        })),
-      });
-    }
-
-    if (merged.matrixBands?.length && (mergedMode === "matrix" || mergedMode === "hybrid")) {
-      const groupsById = new Map((merged.groups ?? []).map((g) => [g.id, g]));
-      await api.post<ApiMatrixTierDto[]>(`/api/workflows/${id}/matrix-tiers`, {
-        tiers: merged.matrixBands.map((b, i) => ({
-          sequenceOrder: i + 1,
-          minAmount: b.min,
-          maxAmount: b.max,
-          approverUserIds: b.approverGroupIds.flatMap((gid) => groupsById.get(gid)?.memberIds ?? []),
-        })),
-      });
-    }
-
+    const mergedMode = normalizeApprovalMode(merged.mode);
     const sequenceMap = { sequential: "Sequential", parallel: "Parallel" } as const;
+    const groups = buildGroupsPayload(merged) ?? [];
+    const matrixTiers = buildMatrixPayload(merged);
 
-    const dto = await api.put<ApiWorkflowDto>(`/api/workflows/${id}`, {
+    // Single atomic publish: mode + approvers land on the new Active version together.
+    await api.put<ApiWorkflowDto>(`/api/workflows/${id}`, {
       name: merged.name,
       description: merged.description || null,
-      approvalMode: modeMap[mergedMode],
+      approvalMode: toApiApprovalMode(mergedMode),
       approvalSequence: sequenceMap[merged.approvalSequence ?? "sequential"],
       returnResumePolicy: merged.returnResumePolicy ?? "RestartFromFirst",
-      slaThresholdHours: merged.sla?.escalationHours ?? 48,
-      escalationEnabled: true,
+      slaThresholdHours: merged.sla?.slaMandatory || merged.sla?.escalationMandatory
+        ? (merged.sla.escalationMandatory ? merged.sla.escalationHours : merged.sla.reminderHours)
+        : null,
+      escalationEnabled: !!merged.sla?.escalationMandatory,
       targetState: "Active",
-      notificationSettingsJson: merged.notifications ? JSON.stringify(merged.notifications) : null,
+      notificationSettingsJson: merged.notifications || merged.sla
+        ? JSON.stringify({ ...(merged.notifications ?? {}), sla: merged.sla ?? null })
+        : null,
+      groups,
+      matrixTiers: matrixTiers ?? null,
     });
 
-    return mapWorkflow(dto);
+    return wdasConfig.getWorkflow(id);
   },
 
   getWorkflowVersions: async (id: string): Promise<ApiWorkflowVersionSummaryDto[]> =>

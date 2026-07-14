@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { useSession } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import { useUsers } from "@/lib/wdas/users-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +26,7 @@ function toDateInput(iso: string) {
 }
 
 function DelegationPage() {
-  const { user } = useSession();
+  const { user, can } = useSession();
   const qc = useQueryClient();
   const [start, setStart] = useState(() => toDateInput(new Date().toISOString()));
   const [end, setEnd] = useState(() => toDateInput(new Date(Date.now() + 7 * 86400000).toISOString()));
@@ -113,8 +114,8 @@ function DelegationPage() {
               <Label htmlFor="act">Delegation active</Label>
             </div>
             <div className="flex gap-2">
-              <Button onClick={save}>Save delegation</Button>
-              {mine?.active && <Button variant="outline" onClick={off}>Turn off</Button>}
+              {can(P.config.delegationMake) && <Button onClick={save}>Save delegation</Button>}
+              {mine?.active && can(P.config.delegationCheck) && <Button variant="outline" onClick={off}>Turn off</Button>}
             </div>
             <Alert>
               <Info className="h-4 w-4" />

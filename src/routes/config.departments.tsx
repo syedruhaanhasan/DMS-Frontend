@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
@@ -6,6 +6,7 @@ import { CreateDepartmentForm } from "@/components/wdas/create-department-form";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { useSession } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/config/departments")({
 
 function DepartmentManagementPage() {
   const router = useRouter();
-  const { hasRole } = useSession();
+  const { can } = useSession();
   const qc = useQueryClient();
   const [editDept, setEditDept] = useState<DeptRow | null>(null);
   const [deleteDept, setDeleteDept] = useState<DeptRow | null>(null);
@@ -38,13 +39,13 @@ function DepartmentManagementPage() {
   const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
 
   useEffect(() => {
-    if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" });
-  }, [hasRole, router]);
+    if (!can(P.config.departments)) router.navigate({ to: "/dashboard" });
+  }, [can, router]);
 
   const departments = useQuery({
     queryKey: ["departments"],
     queryFn: () => wdasConfig.listDepartments(),
-    enabled: hasRole("super_admin"),
+    enabled: can(P.config.departments),
   });
 
   const filteredDepartments = (departments.data ?? []).filter((d) => matchesActiveFilter(d.isActive, statusFilter));
@@ -60,7 +61,7 @@ function DepartmentManagementPage() {
     }
   };
 
-  if (!hasRole("super_admin")) return null;
+  if (!can(P.config.departments)) return null;
 
   const openEdit = (d: DeptRow) => {
     setEditDept(d);
@@ -93,6 +94,7 @@ function DepartmentManagementPage() {
       />
 
       <div className="space-y-6 p-6">
+        {can(P.config.departmentsMake) && (
         <Card className="border-primary/20 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -107,6 +109,7 @@ function DepartmentManagementPage() {
             <CreateDepartmentForm onCreated={() => departments.refetch()} />
           </CardContent>
         </Card>
+        )}
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
@@ -144,17 +147,25 @@ function DepartmentManagementPage() {
                         <TableCell><Badge variant="outline" className="font-mono">{d.code}</Badge></TableCell>
                         <TableCell><ActiveStatusBadge active={d.isActive} /></TableCell>
                         <TableCell>
-                          <ActiveStatusSwitch
-                            id={`dept-active-${d.id}`}
-                            active={d.isActive}
-                            label=""
-                            onChange={(isActive) => toggleDepartmentStatus(d, isActive)}
-                          />
+                          {can(P.config.departmentsCheck) ? (
+                            <ActiveStatusSwitch
+                              id={`dept-active-${d.id}`}
+                              active={d.isActive}
+                              label=""
+                              onChange={(isActive) => toggleDepartmentStatus(d, isActive)}
+                            />
+                          ) : (
+                            <ActiveStatusBadge active={d.isActive} />
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteDept(d)}><Trash2 className="h-4 w-4" /></Button>
+                            {can(P.config.departmentsMake) && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}><Pencil className="h-4 w-4" /></Button>
+                            )}
+                            {can(P.config.departmentsCheck) && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteDept(d)}><Trash2 className="h-4 w-4" /></Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -188,7 +199,7 @@ function DepartmentManagementPage() {
           </div>
           <SheetFooter>
             <Button variant="outline" onClick={() => setEditDept(null)} disabled={saving}>Cancel</Button>
-            <Button onClick={saveEdit} disabled={saving || !editName.trim() || !editCode.trim()}>{saving ? "Saving…" : "Save"}</Button>
+            <Button onClick={saveEdit} disabled={saving || !editName.trim() || !editCode.trim()}>{saving ? "Savingâ€¦" : "Save"}</Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>

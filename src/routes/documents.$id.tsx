@@ -40,7 +40,9 @@ function DetailPage() {
   const [finalize, setFinalize] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  if (!canFetch || q.isPending) return <LoadingState />;
+  // Disabled queries stay "pending" in TanStack Query — only treat as loading while we can fetch.
+  if (!canFetch) return <LoadingState />;
+  if (q.isLoading) return <LoadingState />;
   if (q.isError || !q.data) {
     const message = q.error instanceof ApiError ? q.error.message : "Document not available.";
     return <ErrorState message={message} onRetry={() => q.refetch()} />;

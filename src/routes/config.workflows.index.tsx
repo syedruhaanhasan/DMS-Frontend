@@ -1,10 +1,11 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { useSession, isSuperAdmin } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { wdasConfig } from "@/services/wdas-config";
 import { DEPARTMENTS, type Department, type Workflow } from "@/lib/wdas/types";
 import { Button } from "@/components/ui/button";
@@ -23,10 +24,10 @@ export const Route = createFileRoute("/config/workflows/")({
 function WorkflowsPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { role, scopeDept, viewDept, setViewDept, hasRole } = useSession();
+  const { role, scopeDept, viewDept, setViewDept, can } = useSession();
   const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
   const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
-  useEffect(() => { if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" }); }, [hasRole, router]);
+  useEffect(() => { if (!can(P.config.workflows)) router.navigate({ to: "/dashboard" }); }, [can, router]);
 
   const q = useQuery({
     queryKey: ["workflows", scopeDept],
@@ -57,10 +58,10 @@ function WorkflowsPage() {
     <div>
       <PageHeader
         title="Workflows"
-        subtitle={hasRole("super_admin") ? "All departments' approval workflows." : `Workflows in ${scopeDept}.`}
+        subtitle={can(P.config.workflows) ? "All departments' approval workflows." : `Workflows in ${scopeDept}.`}
         actions={
           <>
-            {hasRole("super_admin") && (
+            {can(P.config.workflows) && (
               <div className="flex items-center gap-2">
                 <ActiveStatusFilter value={statusFilter} onChange={setStatusFilter} />
                 <Label className="text-xs text-muted-foreground">Department</Label>
@@ -73,7 +74,9 @@ function WorkflowsPage() {
                 </Select>
               </div>
             )}
-            <Button asChild><Link to="/config/workflows/new"><Plus className="mr-1 h-4 w-4" /> New workflow</Link></Button>
+            {can(P.config.workflowsMake) && (
+              <Button asChild><Link to="/config/workflows/new"><Plus className="mr-1 h-4 w-4" /> New workflow</Link></Button>
+            )}
           </>
         }
       />
@@ -104,26 +107,32 @@ function WorkflowsPage() {
                         <Link to="/config/workflows/$id" params={{ id: w.id }} className="font-medium text-primary hover:underline">{w.name}</Link>
                         <p className="text-xs text-muted-foreground">{w.description}</p>
                       </TableCell>
-                      <TableCell className="text-sm">{w.documentType ?? "—"}</TableCell>
-                      <TableCell><Badge variant="outline">{w.department ?? "—"}</Badge></TableCell>
+                      <TableCell className="text-sm">{w.documentType ?? "â€”"}</TableCell>
+                      <TableCell><Badge variant="outline">{w.department ?? "â€”"}</Badge></TableCell>
                       <TableCell><Badge variant="secondary">{modeLabel[w.mode ?? "user"]}</Badge></TableCell>
                       <TableCell><Badge className={statusVariant[w.status ?? "draft"]} variant="outline">{(w.status ?? "draft").toUpperCase()}</Badge></TableCell>
                       <TableCell><ActiveStatusBadge active={w.isActive !== false} /></TableCell>
                       <TableCell>
-                        <ActiveStatusSwitch
-                          id={`workflow-active-${w.id}`}
-                          active={w.isActive !== false}
-                          label=""
-                          onChange={(isActive) => toggleWorkflowStatus(w, isActive)}
-                        />
+                        {can(P.config.workflowsCheck) ? (
+                          <ActiveStatusSwitch
+                            id={`workflow-active-${w.id}`}
+                            active={w.isActive !== false}
+                            label=""
+                            onChange={(isActive) => toggleWorkflowStatus(w, isActive)}
+                          />
+                        ) : (
+                          <ActiveStatusBadge active={w.isActive !== false} />
+                        )}
                       </TableCell>
                       <TableCell className="font-mono text-xs">v{w.version ?? 1}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button asChild variant="ghost" size="sm"><Link to="/config/workflows/$id" params={{ id: w.id }}>Open</Link></Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteWorkflow(w)} title="Delete workflow">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {can(P.config.workflowsCheck) && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteWorkflow(w)} title="Delete workflow">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

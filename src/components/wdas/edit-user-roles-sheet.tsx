@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { APP_ROLES, type AppRole, type User } from "@/lib/wdas/types";
+import type { User } from "@/lib/wdas/types";
 import { wdasConfig } from "@/services/wdas-config";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -16,28 +17,35 @@ interface EditUserRolesSheetProps {
 }
 
 export function EditUserRolesSheet({ user, open, onOpenChange, onSaved }: EditUserRolesSheetProps) {
-  const [roles, setRoles] = useState<AppRole[]>(["Maker"]);
+  const [roleIds, setRoleIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const rolesQ = useQuery({
+    queryKey: ["security-roles"],
+    queryFn: () => wdasConfig.listRoles(),
+    enabled: open,
+  });
 
   useEffect(() => {
     if (user) {
-      setRoles(user.appRoles?.length ? user.appRoles : [user.appRole ?? "Maker"]);
+      setRoleIds(user.roleIds?.length ? user.roleIds : []);
     }
   }, [user]);
 
   if (!user) return null;
 
-  const initial = user.appRoles?.length ? user.appRoles : [user.appRole ?? "Maker"];
-  const changed = roles.length !== initial.length || roles.some((r) => !initial.includes(r));
+  const initial = user.roleIds ?? [];
+  const changed =
+    roleIds.length !== initial.length || roleIds.some((id) => !initial.includes(id));
 
   const save = async () => {
-    if (!roles.length) {
+    if (!roleIds.length) {
       toast.error("Select at least one role.");
       return;
     }
     setSaving(true);
     try {
-      await wdasConfig.updateUserRoles(user.id, roles);
+      await wdasConfig.updateUserRoles(user.id, roleIds);
       toast.success("User roles updated", { description: `${user.name}` });
       onSaved();
       onOpenChange(false);
@@ -57,22 +65,22 @@ export function EditUserRolesSheet({ user, open, onOpenChange, onSaved }: EditUs
         </SheetHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label>Application roles</Label>
+            <Label>Roles</Label>
             <div className="flex flex-wrap gap-3">
-              {APP_ROLES.map((r) => (
-                <label key={r} className="flex items-center gap-2 text-sm">
+              {(rolesQ.data ?? []).map((r) => (
+                <label key={r.id} className="flex items-center gap-2 text-sm">
                   <Checkbox
-                    checked={roles.includes(r)}
+                    checked={roleIds.includes(r.id)}
                     disabled={saving}
                     onCheckedChange={(checked) => {
-                      setRoles((prev) => {
-                        if (checked) return prev.includes(r) ? prev : [...prev, r];
-                        const next = prev.filter((role) => role !== r);
+                      setRoleIds((prev) => {
+                        if (checked) return prev.includes(r.id) ? prev : [...prev, r.id];
+                        const next = prev.filter((id) => id !== r.id);
                         return next.length ? next : prev;
                       });
                     }}
                   />
-                  {r}
+                  {r.name}
                 </label>
               ))}
             </div>

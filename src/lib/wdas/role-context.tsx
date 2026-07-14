@@ -3,6 +3,7 @@ import { api, setToken, setUnauthorizedHandler } from "@/lib/api/client";
 import type { ApiLoginResponse, ApiUserSummaryDto } from "@/lib/api/types";
 import { mapUser, pickPrimaryRole, mapApiRole } from "@/lib/api/mappers";
 import type { Role, User, Department } from "./types";
+import { ROUTE_PERMISSIONS, expandImpliedPermissions } from "./permissions";
 
 interface Session {
   role: Role;
@@ -11,6 +12,7 @@ interface Session {
   viewDept?: Department | "all";
   userProfile?: User;
   availableRoles: Role[];
+  permissions: string[];
 }
 
 interface Ctx extends Session {
@@ -20,9 +22,10 @@ interface Ctx extends Session {
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => void;
   scopeDept: Department | "all";
-  /** True if the user was assigned this application role (may differ from active view). */
   hasRole: (r: Role) => boolean;
   hasAnyRole: (roles: Role[]) => boolean;
+  /** True if the user has this permission (or any of the listed permissions). */
+  can: (permission: string | string[]) => boolean;
 }
 
 const RoleCtx = createContext<Ctx | null>(null);
@@ -36,17 +39,15 @@ const GUEST_USER: User = {
 };
 
 function rolesFromApi(dto: ApiUserSummaryDto): Role[] {
-  return [...new Set((dto.roles ?? []).map(mapApiRole))];
+  return [...new Set((dto.roles ?? []).map((r) => mapApiRole(r as never)))];
+}
+
+function emptySession(): Session {
+  return { role: "owner", userId: "", isAuthed: false, viewDept: "all", availableRoles: [], permissions: [] };
 }
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session>({
-    role: "owner",
-    userId: "",
-    isAuthed: false,
-    viewDept: "all",
-    availableRoles: [],
-  });
+  const [session, setSession] = useState<Session>(emptySession);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -56,7 +57,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       } catch {
         /* ignore */
       }
-      setSession({ role: "owner", userId: "", isAuthed: false, viewDept: "all", availableRoles: [] });
+      setSession(emptySession());
     });
     return () => setUnauthorizedHandler(null);
   }, []);
@@ -68,11 +69,13 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       if (raw) {
         const parsed = JSON.parse(raw) as Session;
         if (parsed.isAuthed && !token) {
-          setSession({ role: "owner", userId: "", isAuthed: false, viewDept: "all", availableRoles: [] });
+          setSession(emptySession());
           return;
         }
         setSession((cur) =>
-          cur.isAuthed === parsed.isAuthed && cur.userId === parsed.userId ? cur : { viewDept: "all", ...parsed },
+          cur.isAuthed === parsed.isAuthed && cur.userId === parsed.userId
+            ? cur
+            : { ...emptySession(), viewDept: "all", ...parsed, permissions: parsed.permissions ?? [] },
         );
       }
     } catch {
@@ -97,12 +100,20 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         ? user.department
         : user.department;
 
+  const can = (permission: string | string[]) => {
+    const perms = expandImpliedPermissions(session.permissions ?? []);
+    if (session.availableRoles.includes("super_admin")) return true;
+    const need = Array.isArray(permission) ? permission : [permission];
+    return need.some((p) => perms.includes(p));
+  };
+
   const value: Ctx = {
     ...session,
     user,
     scopeDept,
     hasRole: (r) => session.availableRoles.includes(r),
     hasAnyRole: (roles) => roles.some((r) => session.availableRoles.includes(r)),
+    can,
     setRole: (r) => {
       if (session.availableRoles.length && !session.availableRoles.includes(r)) return;
       setSession((s) => ({ ...s, role: r }));
@@ -113,7 +124,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       setToken(res.accessToken);
       const profile = mapUser(res.user);
       const availableRoles = rolesFromApi(res.user);
-      const role = pickPrimaryRole(res.user.roles);
+      const role = pickPrimaryRole(res.user.roles as never);
       setSession({
         role,
         userId: profile.id,
@@ -121,6 +132,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         viewDept: "all",
         userProfile: profile,
         availableRoles,
+        permissions: expandImpliedPermissions(res.user.permissions ?? profile.permissions ?? []),
       });
     },
     signOut: () => {
@@ -130,7 +142,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       } catch {
         /* ignore */
       }
-      setSession({ role: "owner", userId: "", isAuthed: false, viewDept: "all", availableRoles: [] });
+      setSession(emptySession());
     },
   };
 
@@ -155,7 +167,6 @@ export function isSuperAdmin(role: Role) {
   return role === "super_admin";
 }
 
-/** Routes Super Admin may access (dashboard + configuration only). */
 export function isPathAllowedForSuperAdmin(pathname: string): boolean {
   if (pathname === "/dashboard") return true;
   if (pathname.startsWith("/config")) return true;
@@ -167,7 +178,15 @@ export function isAdminRole(role: Role) {
   return role === "super_admin" || role === "dept_admin";
 }
 
-/** Nav item visible when the user was assigned any matching role. */
 export function canAccessNavItem(itemRoles: Role[], availableRoles: Role[]): boolean {
   return itemRoles.some((r) => availableRoles.includes(r));
+}
+
+export function requiredPermissionForPath(pathname: string): string | null {
+  for (const entry of ROUTE_PERMISSIONS) {
+    if (pathname === entry.prefix || pathname.startsWith(entry.prefix + "/")) {
+      return entry.permission;
+    }
+  }
+  return null;
 }

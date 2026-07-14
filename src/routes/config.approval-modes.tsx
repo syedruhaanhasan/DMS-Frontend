@@ -1,7 +1,8 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { useSession, isSuperAdmin } from "@/lib/wdas/role-context";
+import { P } from "@/lib/wdas/permissions";
 import { ApprovalModeBuilder } from "@/components/wdas/approval-mode-builder";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,8 +15,8 @@ export const Route = createFileRoute("/config/approval-modes")({
 
 function ApprovalModesReference() {
   const router = useRouter();
-  const { hasRole } = useSession();
-  useEffect(() => { if (!hasRole("super_admin")) router.navigate({ to: "/dashboard" }); }, [hasRole, router]);
+  const { can } = useSession();
+  useEffect(() => { if (!can(P.config.approvalModes)) router.navigate({ to: "/dashboard" }); }, [can, router]);
 
   const [wf, setWf] = useState<Partial<Workflow>>({
     mode: "matrix",
@@ -47,7 +48,7 @@ function ApprovalModesReference() {
 
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-base">Try the builder</CardTitle></CardHeader>
-          <CardContent><ApprovalModeBuilder value={wf} onChange={setWf} /></CardContent>
+          <CardContent><ApprovalModeBuilder value={wf} onChange={(patch) => setWf((prev) => ({ ...prev, ...patch }))} /></CardContent>
         </Card>
       </div>
     </div>
