@@ -37,6 +37,7 @@ import { Route as ConfigActiveDirectoryRouteImport } from './routes/config.activ
 import { Route as ConfigWorkflowsIndexRouteImport } from './routes/config.workflows.index'
 import { Route as ExternalDocumentsTokenRouteImport } from './routes/external.documents.$token'
 import { Route as DocumentsIdReviewRouteImport } from './routes/documents.$id.review'
+import { Route as DocumentsIdEditRouteImport } from './routes/documents.$id.edit'
 import { Route as ConfigWorkflowsNewRouteImport } from './routes/config.workflows.new'
 import { Route as ConfigWorkflowsIdRouteImport } from './routes/config.workflows.$id'
 
@@ -180,6 +181,11 @@ const DocumentsIdReviewRoute = DocumentsIdReviewRouteImport.update({
   path: '/review',
   getParentRoute: () => DocumentsIdRoute,
 } as any)
+const DocumentsIdEditRoute = DocumentsIdEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => DocumentsIdRoute,
+} as any)
 const ConfigWorkflowsNewRoute = ConfigWorkflowsNewRouteImport.update({
   id: '/config/workflows/new',
   path: '/config/workflows/new',
@@ -219,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof SettingsIndexRoute
   '/config/workflows/$id': typeof ConfigWorkflowsIdRoute
   '/config/workflows/new': typeof ConfigWorkflowsNewRoute
+  '/documents/$id/edit': typeof DocumentsIdEditRoute
   '/documents/$id/review': typeof DocumentsIdReviewRoute
   '/external/documents/$token': typeof ExternalDocumentsTokenRoute
   '/config/workflows/': typeof ConfigWorkflowsIndexRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsIndexRoute
   '/config/workflows/$id': typeof ConfigWorkflowsIdRoute
   '/config/workflows/new': typeof ConfigWorkflowsNewRoute
+  '/documents/$id/edit': typeof DocumentsIdEditRoute
   '/documents/$id/review': typeof DocumentsIdReviewRoute
   '/external/documents/$token': typeof ExternalDocumentsTokenRoute
   '/config/workflows': typeof ConfigWorkflowsIndexRoute
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/settings/': typeof SettingsIndexRoute
   '/config/workflows/$id': typeof ConfigWorkflowsIdRoute
   '/config/workflows/new': typeof ConfigWorkflowsNewRoute
+  '/documents/$id/edit': typeof DocumentsIdEditRoute
   '/documents/$id/review': typeof DocumentsIdReviewRoute
   '/external/documents/$token': typeof ExternalDocumentsTokenRoute
   '/config/workflows/': typeof ConfigWorkflowsIndexRoute
@@ -318,6 +327,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/config/workflows/$id'
     | '/config/workflows/new'
+    | '/documents/$id/edit'
     | '/documents/$id/review'
     | '/external/documents/$token'
     | '/config/workflows/'
@@ -350,6 +360,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/config/workflows/$id'
     | '/config/workflows/new'
+    | '/documents/$id/edit'
     | '/documents/$id/review'
     | '/external/documents/$token'
     | '/config/workflows'
@@ -382,6 +393,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/config/workflows/$id'
     | '/config/workflows/new'
+    | '/documents/$id/edit'
     | '/documents/$id/review'
     | '/external/documents/$token'
     | '/config/workflows/'
@@ -616,6 +628,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentsIdReviewRouteImport
       parentRoute: typeof DocumentsIdRoute
     }
+    '/documents/$id/edit': {
+      id: '/documents/$id/edit'
+      path: '/edit'
+      fullPath: '/documents/$id/edit'
+      preLoaderRoute: typeof DocumentsIdEditRouteImport
+      parentRoute: typeof DocumentsIdRoute
+    }
     '/config/workflows/new': {
       id: '/config/workflows/new'
       path: '/config/workflows/new'
@@ -646,10 +665,12 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 )
 
 interface DocumentsIdRouteChildren {
+  DocumentsIdEditRoute: typeof DocumentsIdEditRoute
   DocumentsIdReviewRoute: typeof DocumentsIdReviewRoute
 }
 
 const DocumentsIdRouteChildren: DocumentsIdRouteChildren = {
+  DocumentsIdEditRoute: DocumentsIdEditRoute,
   DocumentsIdReviewRoute: DocumentsIdReviewRoute,
 }
 

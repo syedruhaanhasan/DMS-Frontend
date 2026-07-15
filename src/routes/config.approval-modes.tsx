@@ -21,9 +21,9 @@ function ApprovalModesReference() {
   const [wf, setWf] = useState<Partial<Workflow>>({
     mode: "matrix",
     matrixBands: [
-      { id: "b1", min: 0, max: 100000, approverGroupIds: ["g1"], sequence: "sequential" },
-      { id: "b2", min: 100001, max: 500000, approverGroupIds: ["g1", "g2"], sequence: "sequential" },
-      { id: "b3", min: 500001, max: null, approverGroupIds: ["g2"], sequence: "sequential" },
+      { id: "b1", min: 0, max: 100000, approverUserIds: [], approverGroupIds: [], sequence: "sequential" },
+      { id: "b2", min: 100001, max: 500000, approverUserIds: [], approverGroupIds: [], sequence: "sequential" },
+      { id: "b3", min: 500001, max: null, approverUserIds: [], approverGroupIds: [], sequence: "sequential" },
     ],
     groups: [
       { id: "g1", name: "Managers", memberIds: ["u3", "u6"], rule: "any" },

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Workflow as WorkflowIcon, Trash2 } from "lucide-react";
+import { Plus, Workflow as WorkflowIcon, Trash2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { ActiveStatusBadge, ActiveStatusFilter, ActiveStatusSwitch, matchesActiveFilter, type ActiveFilter } from "@/components/wdas/active-status";
 
@@ -26,6 +26,7 @@ function WorkflowsPage() {
   const qc = useQueryClient();
   const { role, scopeDept, viewDept, setViewDept, can } = useSession();
   const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
   useEffect(() => { if (!can(P.config.workflows)) router.navigate({ to: "/dashboard" }); }, [can, router]);
 
@@ -37,7 +38,8 @@ function WorkflowsPage() {
   const modeLabel: Record<string, string> = { matrix: "Amount Matrix", user: "User-based", adhoc: "Ad-hoc", hybrid: "Hybrid", group: "User-based" };
   const statusVariant: Record<string, string> = {
     active: "border-success/30 bg-success/15 text-success",
-    draft: "border-warning/40 bg-warning/20 text-warning-foreground",
+    pending: "border-warning/40 bg-warning/20 text-warning-foreground",
+    draft: "border-muted-foreground/30 bg-muted text-muted-foreground",
     archived: "bg-muted text-muted-foreground",
   };
 
@@ -51,6 +53,21 @@ function WorkflowsPage() {
       qc.invalidateQueries({ queryKey: ["workflows"] });
     } catch (err) {
       toast.error((err as Error).message || "Could not update workflow status.");
+    }
+  };
+
+  const approveWorkflow = async (w: Workflow) => {
+    if (approvingId) return;
+    setApprovingId(w.id);
+    try {
+      await wdasConfig.approveWorkflow(w.id);
+      toast.success("Workflow approved", { description: `${w.name} is now active.` });
+      q.refetch();
+      qc.invalidateQueries({ queryKey: ["workflows"] });
+    } catch (err) {
+      toast.error((err as Error).message || "Could not approve workflow.");
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -110,10 +127,14 @@ function WorkflowsPage() {
                       <TableCell className="text-sm">{w.documentType ?? "â€”"}</TableCell>
                       <TableCell><Badge variant="outline">{w.department ?? "â€”"}</Badge></TableCell>
                       <TableCell><Badge variant="secondary">{modeLabel[w.mode ?? "user"]}</Badge></TableCell>
-                      <TableCell><Badge className={statusVariant[w.status ?? "draft"]} variant="outline">{(w.status ?? "draft").toUpperCase()}</Badge></TableCell>
+                      <TableCell>
+                        <Badge className={statusVariant[w.status ?? "draft"]} variant="outline">
+                          {(w.status ?? "draft").toUpperCase()}
+                        </Badge>
+                      </TableCell>
                       <TableCell><ActiveStatusBadge active={w.isActive !== false} /></TableCell>
                       <TableCell>
-                        {can(P.config.workflowsCheck) ? (
+                        {can(P.config.workflowsCheck) && w.status === "active" ? (
                           <ActiveStatusSwitch
                             id={`workflow-active-${w.id}`}
                             active={w.isActive !== false}
@@ -127,6 +148,17 @@ function WorkflowsPage() {
                       <TableCell className="font-mono text-xs">v{w.version ?? 1}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {can(P.config.workflowsCheck) && w.status === "pending" && (
+                            <Button
+                              size="sm"
+                              className="bg-success text-success-foreground hover:bg-success/90"
+                              disabled={approvingId === w.id}
+                              onClick={() => void approveWorkflow(w)}
+                            >
+                              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                              {approvingId === w.id ? "Approving…" : "Approve"}
+                            </Button>
+                          )}
                           <Button asChild variant="ghost" size="sm"><Link to="/config/workflows/$id" params={{ id: w.id }}>Open</Link></Button>
                           {can(P.config.workflowsCheck) && (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteWorkflow(w)} title="Delete workflow">

@@ -266,7 +266,7 @@ export function mapDocument(
     body: dto.bodyHtml,
     ownerId: dto.ownerUserId,
     ownerName: dto.ownerDisplayName,
-    toIds: [],
+    toIds: dto.adHocApproverUserIds ?? [],
     workflowId: dto.workflowId,
     amount: dto.amount ?? undefined,
     priority: mapPriority(dto.priority),
@@ -280,6 +280,7 @@ export function mapDocument(
     attachments,
     refId: documentRefId(dto.recordNumber),
     recordNumber: dto.recordNumber,
+    revisionNumber: dto.revisionNumber && dto.revisionNumber > 0 ? dto.revisionNumber : 1,
     archiveDocumentId: dto.archiveDocumentId ?? undefined,
     finalizedAt: dto.finalizedAtUtc ?? undefined,
     cancelReason: dto.cancellationReason ?? undefined,
@@ -353,11 +354,13 @@ export function mapWorkflow(dto: ApiWorkflowDto, departmentName?: string): Workf
     department: departmentName ? mapDepartment(departmentName) : undefined,
     documentType: dto.documentType,
     isActive: dto.isActive,
-    status: !dto.isActive
-      ? "archived"
-      : dto.activeVersion?.state === "Active"
-        ? "active"
-        : "draft",
+    status: dto.activeVersion?.state === "Active"
+      ? "active"
+      : dto.activeVersion?.state === "Draft" || dto.activeVersion?.state === "TestPreview"
+        ? "pending"
+        : !dto.isActive
+          ? "archived"
+          : "draft",
     version: dto.activeVersion?.versionNumber,
     mode: approvalMode,
     approvalSequence: dto.activeVersion?.approvalSequence === "Parallel" ? "parallel" : "sequential",

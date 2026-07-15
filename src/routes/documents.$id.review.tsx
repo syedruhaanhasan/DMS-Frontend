@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { wdas } from "@/services/wdas";
 import { useSession } from "@/lib/wdas/role-context";
 import { useDocumentQuery, useCanFetchDocuments } from "@/lib/wdas/use-document-query";
+import { refreshWorkflowViews } from "@/lib/wdas/refresh-workflow-queries";
 import { useUserById, useUsers } from "@/lib/wdas/users-context";
 import { getToken, ApiError } from "@/lib/api/client";
 import { apiPath } from "@/lib/api/client";
@@ -71,18 +72,19 @@ function ReviewPage() {
   const saveComment = async () => {
     if (!comment.trim()) { toast.error("Enter a comment"); return; }
     try {
-      await wdas.commentOnDocument(doc.id, comment);
+      const updated = await wdas.commentOnDocument(doc.id, comment);
+      await refreshWorkflowViews(qc, { userId: user.id, document: updated });
+      setComment("");
       toast.success("Comment saved");
-      qc.invalidateQueries();
     } catch (e) { toast.error((e as Error).message); }
   };
 
   const runAction = async (reason?: string) => {
     if (!confirm) return;
     try {
-      await wdas.actOnDocument(doc.id, confirm, reason ?? comment, user.id);
+      const updated = await wdas.actOnDocument(doc.id, confirm, reason ?? comment, user.id);
+      await refreshWorkflowViews(qc, { userId: user.id, document: updated });
       toast.success(confirm === "approve" ? "Approved" : confirm === "reject" ? "Rejected" : "Returned for correction");
-      qc.invalidateQueries();
       router.navigate({ to: "/inbox" });
     } catch (e) { toast.error((e as Error).message); }
   };

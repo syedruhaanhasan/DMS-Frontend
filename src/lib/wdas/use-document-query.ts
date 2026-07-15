@@ -13,6 +13,7 @@ export function useDocumentQuery(id: string) {
     queryKey: ["doc", id],
     queryFn: () => wdas.getDocument(id),
     enabled: canFetch,
+    staleTime: 0,
   });
 }
 

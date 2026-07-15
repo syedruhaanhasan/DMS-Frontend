@@ -22,9 +22,10 @@ import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, Heading1, Heading2, Table as TableIcon, Image as ImageIcon,
   Link2, Minus, Undo2, Redo2, Check, X, UploadCloud, FileText, Loader2,
-  Highlighter, Palette, Quote, Type, Sparkles, ChevronUp, ChevronDown,
+  Highlighter, Palette, Quote, Type, Sparkles, GripVertical,
 } from "lucide-react";
 import { AttachmentIcon } from "@/components/wdas/attachments";
+import { ApprovalFlowChart } from "@/components/wdas/approval-flow-chart";
 import type { Attachment } from "@/lib/wdas/types";
 
 export const Route = createFileRoute("/documents/new")({
@@ -52,6 +53,7 @@ function NewDoc() {
 
   const [subject, setSubject] = useState("");
   const [toIds, setToIds] = useState<string[]>([]);
+  const [workflowApproverIds, setWorkflowApproverIds] = useState<string[]>([]);
   const [toQuery, setToQuery] = useState("");
   const [toFocused, setToFocused] = useState(false);
   const [workflowId, setWorkflowId] = useState<string>("");
@@ -67,6 +69,8 @@ function NewDoc() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [confirm, setConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [dragApproverId, setDragApproverId] = useState<string | null>(null);
+  const [dragOverApproverId, setDragOverApproverId] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState("Inter");
   const [fontSize, setFontSize] = useState("16");
   const [textColor, setTextColor] = useState("#2563eb");
@@ -81,14 +85,33 @@ function NewDoc() {
   const isParallel = workflow?.approvalSequence === "parallel";
   const amountNum = amount ? Number(amount.replace(/,/g, "")) : undefined;
 
-  const moveApprover = (id: string, direction: -1 | 1) => {
+  const approvalFlowNodes = [
+    {
+      id: `creator-${user.id}`,
+      label: user.name,
+      sub: user.designation || user.department || "Document owner",
+      role: "creator" as const,
+    },
+    ...toIds.map((id) => {
+      const u = users.find((x) => x.id === id);
+      return {
+        id,
+        label: u?.name ?? id,
+        sub: u?.designation || u?.department || "Approver",
+        role: "approver" as const,
+      };
+    }),
+  ];
+
+  const reorderApprover = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
     setToIds((ids) => {
-      const index = ids.indexOf(id);
-      if (index < 0) return ids;
-      const target = index + direction;
-      if (target < 0 || target >= ids.length) return ids;
+      const from = ids.indexOf(fromId);
+      const to = ids.indexOf(toId);
+      if (from < 0 || to < 0) return ids;
       const next = [...ids];
-      [next[index], next[target]] = [next[target], next[index]];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
       return next;
     });
   };
@@ -105,6 +128,36 @@ function NewDoc() {
     setAmountMandatory(mandatory);
     if (!mandatory) setAmount("");
   }, [workflowId, workflow, isFinancial, documentTypesQ.data]);
+
+  // Prefill Approvers from the users configured on the selected workflow.
+  useEffect(() => {
+    if (!workflowId) {
+      setWorkflowApproverIds([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const full = await wdasConfig.getWorkflow(workflowId);
+        if (cancelled) return;
+        const fromWorkflow =
+          full.approverUserIds?.length
+            ? full.approverUserIds
+            : (full.groups ?? []).flatMap((g) => g.memberIds);
+        const seen = new Set<string>();
+        const next = fromWorkflow.filter((id) => {
+          if (!id || id === user.id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+        setToIds(next);
+        setWorkflowApproverIds(next);
+      } catch {
+        /* leave current approvers if workflow detail cannot be loaded */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workflowId, user.id]);
 
   useEffect(() => {
     const el = editorRef.current;
@@ -290,52 +343,131 @@ function NewDoc() {
                 </div>
               </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Document Type / Workflow <span className="text-destructive">*</span></Label>
+                  <Select value={workflowId} onValueChange={setWorkflowId}>
+                    <SelectTrigger><SelectValue placeholder="Select a workflow" /></SelectTrigger>
+                    <SelectContent>
+                      {workflows.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>{w.name} <span className="text-muted-foreground">— {w.type === "financial" ? "Financial" : "Non-financial"}</span></SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {isFinancial && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2.5">
+                      <Checkbox
+                        id="amount-mandatory"
+                        checked={amountMandatory}
+                        onCheckedChange={(checked) => {
+                          const on = checked === true;
+                          setAmountMandatory(on);
+                          if (!on) setAmount("");
+                        }}
+                      />
+                      <Label htmlFor="amount-mandatory" className="cursor-pointer font-normal">
+                        Amount is mandatory
+                      </Label>
+                    </div>
+                    {amountMandatory && (
+                      <div className="space-y-2">
+                        <Label>Amount (PKR) <span className="text-destructive">*</span></Label>
+                        <Input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 250000" />
+                        {amountNum ? <p className="text-xs text-muted-foreground">{formatPKR(amountNum)}</p> : null}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <Label>Approvers <span className="text-destructive">*</span></Label>
                 <p className="text-xs text-muted-foreground">
                   {workflowId
                     ? isParallel
-                      ? "Select individual users — the document goes to all of them at the same time."
-                      : "Select individual users in approval order — first selected approves first, then the next, and so on."
-                    : "Choose a workflow first, then select the users who will approve this document."}
+                      ? "Workflow users are pre-filled and fixed — you can add more. All selected receive the document at once."
+                      : "Workflow users are pre-filled and fixed. Drag to change order, or add more users."
+                    : "Choose a workflow first — its configured users will be added as approvers automatically."}
                 </p>
-                <div className="flex flex-wrap gap-1 rounded-md border p-2">
+                <div className={isParallel ? "flex flex-wrap gap-1 rounded-md border p-2" : "space-y-1.5 rounded-md border p-2"}>
                   {toIds.map((id, index) => {
                     const u = users.find((x) => x.id === id);
-                    return (
-                      <div key={id} className="flex items-center gap-0.5">
-                        <Badge variant="secondary" className="gap-1">
-                          {!isParallel && <span className="text-[10px] font-semibold text-muted-foreground">{index + 1}.</span>}
+                    const fromWorkflow = workflowApproverIds.includes(id);
+                    if (isParallel) {
+                      return (
+                        <Badge key={id} variant="secondary" className="gap-1">
                           {u?.name ?? id}
-                          <button type="button" onClick={() => setToIds((ids) => ids.filter((i) => i !== id))} aria-label="Remove"><X className="h-3 w-3" /></button>
+                          {!fromWorkflow && (
+                            <button type="button" onClick={() => setToIds((ids) => ids.filter((i) => i !== id))} aria-label="Remove">
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </Badge>
-                        {!isParallel && (
-                          <div className="flex flex-col">
-                            <button
-                              type="button"
-                              className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-                              disabled={index === 0}
-                              onClick={() => moveApprover(id, -1)}
-                              aria-label="Move up"
-                            >
-                              <ChevronUp className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-                              disabled={index === toIds.length - 1}
-                              onClick={() => moveApprover(id, 1)}
-                              aria-label="Move down"
-                            >
-                              <ChevronDown className="h-3 w-3" />
-                            </button>
-                          </div>
+                      );
+                    }
+                    const isDragging = dragApproverId === id;
+                    const isDropTarget = dragOverApproverId === id && dragApproverId !== id;
+                    return (
+                      <div
+                        key={id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragApproverId(id);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", id);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (dragOverApproverId !== id) setDragOverApproverId(id);
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverApproverId === id) setDragOverApproverId(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const fromId = e.dataTransfer.getData("text/plain") || dragApproverId;
+                          if (fromId) reorderApprover(fromId, id);
+                          setDragApproverId(null);
+                          setDragOverApproverId(null);
+                        }}
+                        onDragEnd={() => {
+                          setDragApproverId(null);
+                          setDragOverApproverId(null);
+                        }}
+                        className={`flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5 text-sm transition-colors ${
+                          isDragging ? "opacity-50" : ""
+                        } ${isDropTarget ? "border-primary bg-primary/5" : "border-transparent"}`}
+                      >
+                        <span
+                          className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+                          aria-label={`Drag to reorder ${u?.name ?? "approver"}`}
+                          title="Drag to reorder"
+                        >
+                          <GripVertical className="h-4 w-4" />
+                        </span>
+                        <span className="w-5 shrink-0 text-center text-[11px] font-semibold text-muted-foreground">{index + 1}</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {u?.name ?? id}
+                          {u?.designation ? <span className="text-muted-foreground"> — {u.designation}</span> : null}
+                        </span>
+                        {!fromWorkflow && (
+                          <button
+                            type="button"
+                            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            onClick={() => setToIds((ids) => ids.filter((i) => i !== id))}
+                            aria-label="Remove"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
                         )}
                       </div>
                     );
                   })}
                   <input
-                    className="min-w-[120px] flex-1 border-0 bg-transparent p-1 text-sm outline-none"
+                    className="min-w-[120px] w-full flex-1 border-0 bg-transparent p-1 text-sm outline-none"
                     placeholder={toIds.length ? "Add another…" : "Search or pick users…"}
                     value={toQuery}
                     onChange={(e) => setToQuery(e.target.value)}
@@ -393,64 +525,23 @@ function NewDoc() {
                 <Input value={subject} onChange={(e) => setSubject(e.target.value.slice(0, 120))} placeholder="Concise, action-oriented subject" />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              {workflowId && (
                 <div className="space-y-2">
-                  <Label>Document Type / Workflow <span className="text-destructive">*</span></Label>
-                  <Select value={workflowId} onValueChange={setWorkflowId}>
-                    <SelectTrigger><SelectValue placeholder="Select a workflow" /></SelectTrigger>
-                    <SelectContent>
-                      {workflows.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>{w.name} <span className="text-muted-foreground">— {w.type === "financial" ? "Financial" : "Non-financial"}</span></SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {isFinancial && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2.5">
-                      <Checkbox
-                        id="amount-mandatory"
-                        checked={amountMandatory}
-                        onCheckedChange={(checked) => {
-                          const on = checked === true;
-                          setAmountMandatory(on);
-                          if (!on) setAmount("");
-                        }}
-                      />
-                      <Label htmlFor="amount-mandatory" className="cursor-pointer font-normal">
-                        Amount is mandatory
-                      </Label>
-                    </div>
-                    {amountMandatory && (
-                      <div className="space-y-2">
-                        <Label>Amount (PKR) <span className="text-destructive">*</span></Label>
-                        <Input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 250000" />
-                        {amountNum ? <p className="text-xs text-muted-foreground">{formatPKR(amountNum)}</p> : null}
-                      </div>
-                    )}
+                  <div>
+                    <p className="text-xs font-medium text-foreground">Approval chart</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      Creator plus every approver you add — updates live as you build the list.
+                    </p>
                   </div>
-                )}
-              </div>
-
-              {workflowId && toIds.length > 0 && (
-                <div className="rounded-md border bg-muted/40 p-3">
-                  <p className="text-xs font-medium text-foreground">Approval chain</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Routing: {isParallel ? "Parallel — all selected users receive the document at once" : "Sequential — users approve in the order shown"}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {isParallel
-                      ? toIds.map((id) => users.find((u) => u.id === id)?.name ?? id).join(", ")
-                      : toIds.map((id, i) => {
-                          const name = users.find((u) => u.id === id)?.name ?? id;
-                          return i === 0 ? name : ` → ${name}`;
-                        }).join("")}
-                  </p>
-                </div>
-              )}
-              {workflowId && toIds.length === 0 && (
-                <div className="rounded-md border bg-muted/40 p-3">
-                  <p className="text-xs text-muted-foreground">Select at least one approver above to build the approval chain.</p>
+                  <ApprovalFlowChart
+                    nodes={toIds.length > 0 ? approvalFlowNodes : [{ ...approvalFlowNodes[0] }]}
+                    mode={isParallel ? "parallel" : "sequential"}
+                  />
+                  {toIds.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Add at least one approver above to complete the chart.
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

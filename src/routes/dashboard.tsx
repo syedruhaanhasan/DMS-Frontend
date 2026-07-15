@@ -19,6 +19,7 @@ import { Link } from "@tanstack/react-router";
 import { isAdminRole } from "@/lib/wdas/role-context";
 import { Building2, FileType, GitBranch, Mail, Network, Shield, UserPlus, Workflow as WorkflowIcon } from "lucide-react";
 import { useCanFetchDocuments } from "@/lib/wdas/use-document-query";
+import { refreshWorkflowViews } from "@/lib/wdas/refresh-workflow-queries";
 import {
   Area,
   AreaChart,
@@ -149,14 +150,22 @@ function StandardDashboard() {
     { name: "Delayed", value: Math.round((overdue / slaTotal) * 100), color: "#f97316" },
   ];
 
-  const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
+  const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject"; stepId?: string } | null>(null);
 
   const runAction = async (reason?: string) => {
     if (!confirm) return;
     try {
-      await wdas.actOnDocument(confirm.id, confirm.action, reason ?? "Approved from dashboard", user.id);
+      const updated = await wdas.actOnDocument(
+        confirm.id,
+        confirm.action,
+        reason ?? "Approved from dashboard",
+        user.id,
+        confirm.stepId,
+      );
+      await refreshWorkflowViews(qc, { userId: user.id, document: updated });
+      await dashboardQ.refetch();
+      setConfirm(null);
       toast.success(confirm.action === "approve" ? "Document approved" : "Document rejected");
-      qc.invalidateQueries();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -445,8 +454,8 @@ function StandardDashboard() {
                 <DocumentTable
                   docs={pending.data}
                   showActions="approver"
-                  onApprove={(id) => setConfirm({ id, action: "approve" })}
-                  onReject={(id) => setConfirm({ id, action: "reject" })}
+                  onApprove={(id) => setConfirm({ id, action: "approve", stepId: pending.data?.find((d) => d.id === id)?.currentStepId })}
+                  onReject={(id) => setConfirm({ id, action: "reject", stepId: pending.data?.find((d) => d.id === id)?.currentStepId })}
                 />}
             </CardContent>
           </Card>
@@ -465,8 +474,8 @@ function StandardDashboard() {
                   <DocumentTable
                     docs={delegated.data ?? []}
                     showActions="approver"
-                    onApprove={(id) => setConfirm({ id, action: "approve" })}
-                    onReject={(id) => setConfirm({ id, action: "reject" })}
+                    onApprove={(id) => setConfirm({ id, action: "approve", stepId: delegated.data?.find((d) => d.id === id)?.currentStepId })}
+                    onReject={(id) => setConfirm({ id, action: "reject", stepId: delegated.data?.find((d) => d.id === id)?.currentStepId })}
                   />}
               </CardContent>
             </Card>

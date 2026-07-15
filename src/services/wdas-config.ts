@@ -121,12 +121,22 @@ function buildMatrixPayload(w: Workflow) {
   }
 
   const groupsById = new Map((w.groups ?? []).map((g) => [g.id, g]));
-  return w.matrixBands.map((b, i) => ({
-    sequenceOrder: i + 1,
-    minAmount: b.min,
-    maxAmount: b.max,
-    approverUserIds: b.approverGroupIds.flatMap((gid) => groupsById.get(gid)?.memberIds ?? []),
-  }));
+  return w.matrixBands.map((b, i) => {
+    const fromUsers = b.approverUserIds ?? [];
+    const fromGroups = b.approverGroupIds.flatMap((gid) => groupsById.get(gid)?.memberIds ?? []);
+    const seen = new Set<string>();
+    const approverUserIds = [...fromUsers, ...fromGroups].filter((id) => {
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return {
+      sequenceOrder: i + 1,
+      minAmount: b.min,
+      maxAmount: b.max,
+      approverUserIds,
+    };
+  });
 }
 
 function findWorkflowDuplicate(
@@ -402,6 +412,7 @@ export const wdasConfig = {
         id: t.id,
         min: Number(t.minAmount),
         max: t.maxAmount != null ? Number(t.maxAmount) : null,
+        approverUserIds: [...(t.approverUserIds ?? [])],
         approverGroupIds: mappedGroups
           .filter((g) => g.memberIds.some((uid) => (t.approverUserIds ?? []).includes(uid)))
           .map((g) => g.id),
@@ -410,7 +421,7 @@ export const wdasConfig = {
     };
   },
 
-  createWorkflow: async (w: Workflow) => {
+  createWorkflow: async (w: Workflow, options?: { publishImmediately?: boolean }) => {
     const departmentId = await resolveDepartmentId(w.department);
     const name = w.name.trim();
     const documentType = (w.documentType ?? w.name.replace(/\s+/g, "")).trim();
@@ -436,6 +447,7 @@ export const wdasConfig = {
         : null,
       groups: buildGroupsPayload(w) ?? null,
       matrixTiers: buildMatrixPayload(w) ?? null,
+      publishImmediately: options?.publishImmediately === true,
     });
 
     return mapWorkflow(dto);
@@ -457,8 +469,8 @@ export const wdasConfig = {
 
   findWorkflowDuplicate,
 
-  /** Create workflow (active v1) in a single request, including groups/matrix when configured. */
-  createAndPublishWorkflow: async (w: Workflow) => {
+  /** Create workflow. Checkers can pass publishImmediately; makers submit as Pending. */
+  createAndPublishWorkflow: async (w: Workflow, options?: { publishImmediately?: boolean }) => {
     const workflows = await wdasConfig.listWorkflows("all");
     const existing = findWorkflowDuplicate(workflows, {
       name: w.name,
@@ -467,13 +479,26 @@ export const wdasConfig = {
     });
 
     if (existing) {
-      await wdasConfig.publishWorkflowVersion(existing.id, w, "system");
+      if (options?.publishImmediately) {
+        await wdasConfig.publishWorkflowVersion(existing.id, w, "system");
+      } else {
+        await wdasConfig.applyWorkflowConfiguration(existing.id, w);
+      }
       return wdasConfig.getWorkflow(existing.id);
     }
 
-    const created = await wdasConfig.createWorkflow(w);
-    await wdasConfig.applyWorkflowConfiguration(created.id, w);
+    const created = await wdasConfig.createWorkflow(w, options);
+    // Groups/matrix already included on create when provided; keep apply for duplicates/edge cases.
+    if (!(w.approverUserIds?.length || w.groups?.length || w.matrixBands?.length)) {
+      await wdasConfig.applyWorkflowConfiguration(created.id, w);
+    }
     return wdasConfig.getWorkflow(created.id);
+  },
+
+  /** Checker approves a pending (Draft) workflow and makes it Active. */
+  approveWorkflow: async (id: string) => {
+    const current = await wdasConfig.getWorkflow(id);
+    return wdasConfig.publishWorkflowVersion(id, current, "checker");
   },
 
   publishWorkflowVersion: async (id: string, changes: Partial<Workflow>, _publishedBy: string, _note?: string) => {

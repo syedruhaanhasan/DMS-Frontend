@@ -154,6 +154,7 @@ export interface ApiDocumentRecipientDto {
 export interface ApiDocumentDto {
   id: string;
   recordNumber: number;
+  revisionNumber?: number;
   ownerUserId: string;
   ownerDisplayName: string;
   departmentId: string;
@@ -171,6 +172,7 @@ export interface ApiDocumentDto {
   archiveDocumentId: string | null;
   finalizedAtUtc: string | null;
   cancellationReason: string | null;
+  adHocApproverUserIds?: string[] | null;
   recipients: ApiDocumentRecipientDto[];
   workflowSteps: ApiWorkflowStepDto[];
 }

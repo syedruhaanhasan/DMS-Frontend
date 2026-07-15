@@ -117,11 +117,14 @@ function NewWorkflowWizard() {
     return true;
   })();
 
-  const publish = async () => {
+  const canPublishNow = can(P.config.workflowsCheck);
+  const canSubmitForApproval = can(P.config.workflowsMake);
+
+  const submitWorkflow = async (publishImmediately: boolean) => {
     if (publishing) return;
 
     if (!isAuthed || !getToken()) {
-      toast.error("Session expired", { description: "Please sign in again as Super Admin or Department Admin." });
+      toast.error("Session expired", { description: "Please sign in again." });
       router.navigate({ to: "/login" });
       return;
     }
@@ -136,7 +139,7 @@ function NewWorkflowWizard() {
         type: wf.type ?? "non_financial",
         department: wf.department,
         documentType: wf.documentType!.trim(),
-        status: "active",
+        status: publishImmediately ? "active" : "pending",
         version: 1,
         mode: wf.mode as ApprovalMode,
         approvalSequence: wf.approvalSequence,
@@ -147,12 +150,18 @@ function NewWorkflowWizard() {
         hybridFinalOwnerChoice: wf.hybridFinalOwnerChoice,
         sla: wf.sla,
         notifications: wf.notifications,
-        versionHistory: [{ version: 1, publishedAt: new Date().toISOString(), publishedBy: user.name, note: "Initial publish" }],
-      });
+        versionHistory: [{ version: 1, publishedAt: new Date().toISOString(), publishedBy: user.name, note: publishImmediately ? "Published" : "Submitted for approval" }],
+      }, { publishImmediately });
 
       toast.success(
-        completingExisting ? "Workflow updated" : "Workflow published",
-        { description: completingExisting ? `${wf.name} configuration was saved.` : `${wf.name} v1 is now active.` },
+        publishImmediately
+          ? (completingExisting ? "Workflow updated" : "Workflow published")
+          : "Submitted for approval",
+        {
+          description: publishImmediately
+            ? (completingExisting ? `${wf.name} configuration was saved.` : `${wf.name} v1 is now active.`)
+            : `${wf.name} is Pending — a checker must Approve it before it can be used.`,
+        },
       );
       qc.invalidateQueries({ queryKey: ["workflows"] });
       router.navigate({ to: "/config/workflows" });
@@ -164,7 +173,7 @@ function NewWorkflowWizard() {
         toast.error(e.message, {
           description: isDuplicate
             ? "Open the existing workflow or use a different name or document type."
-            : "Refresh the page and try publishing again.",
+            : "Refresh the page and try again.",
           ...(existingId
             ? {
                 action: {
@@ -175,7 +184,7 @@ function NewWorkflowWizard() {
             : {}),
         });
       } else {
-        toast.error((e as Error).message || "Could not publish workflow.");
+        toast.error((e as Error).message || "Could not save workflow.");
       }
     } finally {
       setPublishing(false);
@@ -220,16 +229,39 @@ function NewWorkflowWizard() {
             <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
               Next <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
-          ) : can(P.config.workflowsCheck) ? (
-            <Button
-              onClick={publish}
-              disabled={publishing}
-              className="bg-success text-success-foreground hover:bg-success/90"
-            >
-              <CheckCircle2 className="mr-1 h-4 w-4" /> {publishing ? "Publishing…" : "Publish workflow"}
-            </Button>
           ) : (
-            <p className="text-sm text-muted-foreground">Checker rights are required to publish this workflow.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {canSubmitForApproval && !canPublishNow && (
+                <Button
+                  onClick={() => void submitWorkflow(false)}
+                  disabled={publishing}
+                  className="bg-warning text-warning-foreground hover:bg-warning/90"
+                >
+                  <CheckCircle2 className="mr-1 h-4 w-4" /> {publishing ? "Submitting…" : "Submit for approval"}
+                </Button>
+              )}
+              {canPublishNow && (
+                <Button
+                  onClick={() => void submitWorkflow(true)}
+                  disabled={publishing}
+                  className="bg-success text-success-foreground hover:bg-success/90"
+                >
+                  <CheckCircle2 className="mr-1 h-4 w-4" /> {publishing ? "Publishing…" : "Publish workflow"}
+                </Button>
+              )}
+              {canSubmitForApproval && canPublishNow && (
+                <Button
+                  variant="outline"
+                  onClick={() => void submitWorkflow(false)}
+                  disabled={publishing}
+                >
+                  Submit as Pending
+                </Button>
+              )}
+              {!canSubmitForApproval && !canPublishNow && (
+                <p className="text-sm text-muted-foreground">Maker or Checker rights are required to save this workflow.</p>
+              )}
+            </div>
           )}
         </div>
       </div>

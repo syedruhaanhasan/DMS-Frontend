@@ -54,6 +54,9 @@ export interface MatrixBand {
   id: string;
   min: number;
   max: number | null; // null = "and above"
+  /** Users who approve when the amount falls in this band. */
+  approverUserIds?: string[];
+  /** Legacy: group-based steps; prefer approverUserIds for new configs. */
   approverGroupIds: string[];
   sequence: "sequential" | "parallel";
 }
@@ -82,7 +85,7 @@ export interface NotificationSettings {
   reminder: { email: boolean; inApp: boolean; sms: boolean };
 }
 
-export type WorkflowStatus = "active" | "draft" | "archived";
+export type WorkflowStatus = "active" | "pending" | "draft" | "archived";
 
 export interface WorkflowVersion {
   version: number;
@@ -140,6 +143,7 @@ export interface Document {
   id: string;
   refId?: string;
   recordNumber?: number;
+  revisionNumber?: number;
   archiveDocumentId?: string;
   subject: string;
   body: string;

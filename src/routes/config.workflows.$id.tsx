@@ -122,20 +122,16 @@ function WorkflowDetail() {
 
   const applyCfoTemplate = () => {
     const ts = Date.now();
-    const g1 = { id: `g-${ts}-1`, name: "Department Head", memberIds: [] as string[], rule: "any" as const };
-    const g2 = { id: `g-${ts}-2`, name: "Director", memberIds: [] as string[], rule: "any" as const };
-    const g3 = { id: `g-${ts}-3`, name: "CFO / Executive", memberIds: [] as string[], rule: "any" as const };
     setDraft({
       ...d,
       mode: "matrix",
-      groups: [...(d.groups ?? []), g1, g2, g3],
       matrixBands: [
-        { id: `b-${ts}-1`, min: 0, max: 50000, approverGroupIds: [g1.id], sequence: "sequential" },
-        { id: `b-${ts}-2`, min: 50001, max: 500000, approverGroupIds: [g2.id], sequence: "sequential" },
-        { id: `b-${ts}-3`, min: 500001, max: null, approverGroupIds: [g3.id], sequence: "sequential" },
+        { id: `b-${ts}-1`, min: 0, max: 50000, approverUserIds: [], approverGroupIds: [], sequence: "sequential" },
+        { id: `b-${ts}-2`, min: 50001, max: 500000, approverUserIds: [], approverGroupIds: [], sequence: "sequential" },
+        { id: `b-${ts}-3`, min: 500001, max: null, approverUserIds: [], approverGroupIds: [], sequence: "sequential" },
       ],
     });
-    toast.success("CFO executive template applied â€” assign group members before publishing.");
+    toast.success("CFO amount bands applied — select a user on each band before publishing.");
   };
 
   const cloneMatrix = async () => {
@@ -157,8 +153,36 @@ function WorkflowDetail() {
         actions={
           <>
             <ActiveStatusBadge active={w.isActive !== false} />
+            {w.status === "pending" && (
+              <Badge variant="outline" className="border-warning/40 bg-warning/20 text-warning-foreground">PENDING</Badge>
+            )}
             <Button variant="outline" onClick={() => router.history.back()}>Back</Button>
-            {can(P.config.workflowsCheck) && (
+            {can(P.config.workflowsCheck) && w.status === "pending" && (
+              <Button
+                disabled={publishing}
+                className="bg-success text-success-foreground hover:bg-success/90"
+                onClick={async () => {
+                  setPublishing(true);
+                  try {
+                    await wdasConfig.approveWorkflow(w.id);
+                    toast.success("Workflow approved", { description: `${w.name} is now active.` });
+                    await Promise.all([
+                      qc.invalidateQueries({ queryKey: ["workflow", id] }),
+                      qc.invalidateQueries({ queryKey: ["workflows"] }),
+                    ]);
+                    setDraft(null);
+                    await q.refetch();
+                  } catch (e) {
+                    toast.error((e as Error).message || "Could not approve workflow.");
+                  } finally {
+                    setPublishing(false);
+                  }
+                }}
+              >
+                <CheckCircle2 className="mr-1 h-4 w-4" /> {publishing ? "Approving…" : "Approve"}
+              </Button>
+            )}
+            {can(P.config.workflowsCheck) && w.status !== "pending" && (
               <Button disabled={publishing} onClick={() => setConfirmPublish(true)}>
                 <Save className="mr-1 h-4 w-4" /> {publishing ? "Publishing…" : "Publish new version"}
               </Button>

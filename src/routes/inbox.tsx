@@ -11,6 +11,8 @@ import { DelegationBanner } from "@/components/wdas/delegation-banner";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { useCanFetchDocuments } from "@/lib/wdas/use-document-query";
+import { refreshWorkflowViews } from "@/lib/wdas/refresh-workflow-queries";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/inbox")({
   component: InboxPage,
@@ -25,14 +27,22 @@ function InboxPage() {
     queryFn: () => wdas.listDocuments({ approverId: user.id }),
     enabled: canFetch && !!user.id,
   });
-  const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
+  const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject"; stepId?: string } | null>(null);
 
   const runAction = async (reason?: string) => {
     if (!confirm) return;
     try {
-      await wdas.actOnDocument(confirm.id, confirm.action, reason ?? "Approved from inbox", user.id);
+      const updated = await wdas.actOnDocument(
+        confirm.id,
+        confirm.action,
+        reason ?? "Approved from inbox",
+        user.id,
+        confirm.stepId,
+      );
+      await refreshWorkflowViews(qc, { userId: user.id, document: updated });
+      await q.refetch();
+      setConfirm(null);
       toast.success(confirm.action === "approve" ? "Approved" : "Rejected");
-      qc.invalidateQueries();
     } catch (e) { toast.error((e as Error).message); }
   };
 
@@ -49,8 +59,14 @@ function InboxPage() {
               <DocumentTable
                 docs={q.data}
                 showActions="approver"
-                onApprove={(id) => setConfirm({ id, action: "approve" })}
-                onReject={(id) => setConfirm({ id, action: "reject" })}
+                onApprove={(id) => {
+                  const doc = q.data?.find((d) => d.id === id);
+                  setConfirm({ id, action: "approve", stepId: doc?.currentStepId });
+                }}
+                onReject={(id) => {
+                  const doc = q.data?.find((d) => d.id === id);
+                  setConfirm({ id, action: "reject", stepId: doc?.currentStepId });
+                }}
               />}
           </CardContent>
         </Card>

@@ -182,10 +182,18 @@ export const wdas = {
     id: string,
     action: "approve" | "reject" | "return",
     comment: string,
-    _actorId?: string,
+    actorId?: string,
+    preferredStepId?: string,
   ): Promise<Document> => {
     const doc = await wdas.getDocument(id);
-    const stepId = doc.currentStepId;
+    // Prefer the caller's own active step (parallel / multi-approver), then inbox step id, then first active.
+    const actorStepId = actorId
+      ? doc.steps.find((s) => s.status === "pending" && s.approverId === actorId)?.id
+      : undefined;
+    const preferredOk = preferredStepId && doc.steps.some((s) => s.id === preferredStepId && s.status === "pending")
+      ? preferredStepId
+      : undefined;
+    const stepId = actorStepId ?? preferredOk ?? doc.currentStepId;
     if (!stepId) throw new Error("No active approval step on this document.");
 
     const path = `/api/workflow-steps/${stepId}/${action}`;
@@ -227,6 +235,67 @@ export const wdas = {
     const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${id}/cancel`, {
       reason: reason || null,
     });
+    return mapDocument(dto);
+  },
+
+  /** Reopen a rejected document for the owner; bumps revision (v2, v3, …). */
+  reviseDocument: async (id: string): Promise<Document> => {
+    const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${id}/revise`);
+    return mapDocument(dto);
+  },
+
+  updateDocument: async (
+    id: string,
+    input: {
+      subject: string;
+      body: string;
+      toIds: string[];
+      amount?: number;
+      priority: Priority;
+      toNames?: string[];
+      directoryUsers?: User[];
+    },
+    submit: boolean,
+    pendingFiles: File[] = [],
+  ): Promise<Document> => {
+    const priority = toApiPriority(input.priority as Priority);
+    const shouldDeferSubmit = submit && pendingFiles.length > 0;
+
+    // Always leave recipients/approvers untouched on the server for update/resubmit.
+    // Rewriting DocumentRecipient rows caused DbUpdateConcurrencyException.
+    const existing = await api.get<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${id}`);
+
+    const dto = await api.put<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${id}`, {
+      toRecipients: existing.toRecipients ?? "",
+      subject: input.subject,
+      bodyHtml: input.body,
+      amount: input.amount ?? null,
+      priority,
+      recipients: null,
+      adHocApproverUserIds: null,
+      submit: shouldDeferSubmit ? false : submit,
+      idempotencyKey: null,
+    });
+
+    await Promise.all(
+      pendingFiles.map(async (file) => {
+        const form = new FormData();
+        form.append("file", file);
+        await apiUpload<ApiAttachmentDto>(`/api/documents/${id}/attachments`, form);
+      }),
+    );
+
+    if (shouldDeferSubmit) {
+      const submitted = await api.post<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${id}/submit`, {
+        idempotencyKey: null,
+      });
+      return mapDocument(submitted);
+    }
+
+    if (pendingFiles.length > 0) {
+      return wdas.getDocument(id);
+    }
+
     return mapDocument(dto);
   },
 

@@ -21,6 +21,11 @@ function normalizeMode(mode?: ApprovalMode | "group"): ApprovalMode {
   return mode ?? "user";
 }
 
+function bandApproverIds(band: MatrixBand, groupsById: Map<string, ApproverGroup>): string[] {
+  if (band.approverUserIds?.length) return band.approverUserIds;
+  return band.approverGroupIds.flatMap((gid) => groupsById.get(gid)?.memberIds ?? []);
+}
+
 /** Resolve the visible chain preview based on mode + config + sample amount. */
 export function resolveWorkflowChain(
   mode: ApprovalMode | "group" | undefined,
@@ -38,11 +43,18 @@ export function resolveWorkflowChain(
       (b) => sampleAmount >= b.min && (b.max === null || sampleAmount <= b.max),
     );
     if (!band) return nodes;
-    band.approverGroupIds.forEach((gid) => {
-      const g = groupsById.get(gid);
-      if (!g) return;
-      const members = g.memberIds.map((id) => userName(id)).filter(Boolean).join(", ");
-      nodes.push({ label: g.name, sub: members || "no users" });
+    const ids = bandApproverIds(band, groupsById);
+    if (ids.length === 0) {
+      nodes.push({ label: "No approver selected", sub: "Pick a user for this band" });
+      return nodes;
+    }
+    ids.forEach((id, index) => {
+      nodes.push({
+        label: userName(id) ?? id,
+        sub: band.max === null
+          ? `${formatPKR(band.min)}+ · Step ${index + 1}`
+          : `${formatPKR(band.min)}–${formatPKR(band.max)} · Step ${index + 1}`,
+      });
     });
   } else if (resolvedMode === "user") {
     (cfg.approverUserIds ?? []).forEach((id, index) => {
@@ -61,14 +73,15 @@ export function resolveWorkflowChain(
   return nodes;
 }
 
-/** Validate matrix bands: no gaps, no overlaps. */
+/** Validate matrix bands: no gaps, no overlaps, each band has at least one user. */
 export function validateMatrix(bands: MatrixBand[]): string[] {
   const errors: string[] = [];
   const sorted = [...bands].sort((a, b) => a.min - b.min);
   for (let i = 0; i < sorted.length; i++) {
     const b = sorted[i];
     if (b.max !== null && b.max < b.min) errors.push(`Band ${i + 1}: max is less than min.`);
-    if (b.approverGroupIds.length === 0) errors.push(`Band ${i + 1}: pick at least one approver step.`);
+    const hasUsers = (b.approverUserIds?.length ?? 0) > 0 || b.approverGroupIds.length > 0;
+    if (!hasUsers) errors.push(`Band ${i + 1}: select at least one user for this range.`);
     const next = sorted[i + 1];
     if (next) {
       if (b.max === null) errors.push(`Band ${i + 1}: "and above" band must be last.`);
@@ -148,15 +161,11 @@ export function ApprovalModeBuilder({ value, onChange, showPreview = true }: Pro
       </div>
 
       {mode === "matrix" && (
-        <>
-          <MatrixEditor
-            bands={bands}
-            groups={groups}
-            onChange={(next) => onChange({ matrixBands: next })}
-            errors={errors}
-          />
-          <GroupsEditor groups={groups} onChange={(next) => onChange({ groups: next })} label="Approver steps (for matrix bands)" />
-        </>
+        <MatrixEditor
+          bands={bands}
+          onChange={(next) => onChange({ matrixBands: next })}
+          errors={errors}
+        />
       )}
       {mode === "user" && (
         <UsersEditor
@@ -201,18 +210,29 @@ export function ApprovalModeBuilder({ value, onChange, showPreview = true }: Pro
 /* ---------------- Matrix editor ---------------- */
 
 function MatrixEditor({
-  bands, groups, onChange, errors,
+  bands, onChange, errors,
 }: {
   bands: MatrixBand[];
-  groups: ApproverGroup[];
   onChange: (b: MatrixBand[]) => void;
   errors: string[];
 }) {
+  const { users } = useUsers();
+  const [pickerForBand, setPickerForBand] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
   const add = () => {
-    const lastMax = bands.reduce((max, b) => (b.max !== null && b.max > max ? b.max : max), 0);
+    const lastMax = bands.reduce((max, b) => (b.max !== null && b.max > max ? b.max : max), -1);
+    const min = lastMax < 0 ? 0 : lastMax + 1;
     onChange([
       ...bands,
-      { id: `b-${Date.now()}`, min: lastMax + 1, max: lastMax + 100000, approverGroupIds: [], sequence: "sequential" },
+      {
+        id: `b-${Date.now()}`,
+        min,
+        max: min + 100000,
+        approverUserIds: [],
+        approverGroupIds: [],
+        sequence: "sequential",
+      },
     ]);
   };
   const update = (id: string, patch: Partial<MatrixBand>) => onChange(bands.map((b) => (b.id === id ? { ...b, ...patch } : b)));
@@ -226,8 +246,26 @@ function MatrixEditor({
     onChange(copy);
   };
 
+  const addUserToBand = (bandId: string, userId: string) => {
+    const band = bands.find((b) => b.id === bandId);
+    if (!band) return;
+    const current = band.approverUserIds ?? [];
+    if (current.includes(userId)) return;
+    update(bandId, { approverUserIds: [...current, userId] });
+    setQuery("");
+  };
+
   return (
     <div className="space-y-3">
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertTitle>Amount bands → users</AlertTitle>
+        <AlertDescription>
+          Add a band for each amount range and select the user(s) who approve documents in that range.
+          Example: 0–100,000 → User A; 100,001+ → User B.
+        </AlertDescription>
+      </Alert>
+
       {errors.length > 0 && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -239,70 +277,141 @@ function MatrixEditor({
           </AlertDescription>
         </Alert>
       )}
-      <div className="rounded-md border">
-        <div className="grid grid-cols-[24px_1fr_1fr_2fr_120px_80px] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-          <span></span><span>Min (PKR)</span><span>Max (PKR)</span><span>Approver step(s)</span><span>Sequence</span><span className="text-right">Actions</span>
-        </div>
-        {bands.length === 0 && (
-          <div className="p-6 text-center text-sm text-muted-foreground">No bands yet. Add your first band.</div>
-        )}
-        {bands.map((b, i) => (
-          <div key={b.id} className="grid grid-cols-[24px_1fr_1fr_2fr_120px_80px] items-center gap-2 border-b px-3 py-2 last:border-0">
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-            <Input type="number" value={b.min} onChange={(e) => update(b.id, { min: Number(e.target.value) || 0 })} className="h-8" />
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={b.max ?? ""}
-                onChange={(e) => update(b.id, { max: e.target.value === "" ? null : Number(e.target.value) })}
-                placeholder="and above"
-                className="h-8"
-              />
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {groups.map((g) => {
-                const on = b.approverGroupIds.includes(g.id);
-                return (
-                  <button
-                    type="button"
-                    key={g.id}
-                    onClick={() =>
-                      update(b.id, {
-                        approverGroupIds: on ? b.approverGroupIds.filter((x) => x !== g.id) : [...b.approverGroupIds, g.id],
-                      })
-                    }
-                    className={cn(
-                      "rounded-full border px-2 py-0.5 text-[11px]",
-                      on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted",
-                    )}
-                  >{g.name}</button>
-                );
-              })}
-              {!groups.length && <span className="text-xs text-muted-foreground">Add approver steps below first.</span>}
-            </div>
-            <Select value={b.sequence} onValueChange={(v) => update(b.id, { sequence: v as "sequential" | "parallel" })}>
-              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sequential">Sequential</SelectItem>
-                <SelectItem value="parallel">Parallel</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex justify-end gap-0.5">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(b.id, -1)} disabled={i === 0}><ArrowUp className="h-3.5 w-3.5" /></Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(b.id, 1)} disabled={i === bands.length - 1}><ArrowDown className="h-3.5 w-3.5" /></Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(b.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <Button variant="outline" size="sm" onClick={add}><Plus className="mr-1 h-3.5 w-3.5" /> Add band</Button>
 
-      {groups.length === 0 && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>Define approver steps below to assign users to amount bands.</AlertDescription>
-        </Alert>
-      )}
+      <div className="space-y-3">
+        {bands.length === 0 && (
+          <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
+            No bands yet. Add your first amount range and pick a user.
+          </div>
+        )}
+        {bands.map((b, i) => {
+          const selectedIds = b.approverUserIds ?? [];
+          const filtered = users
+            .filter(
+              (u) =>
+                !selectedIds.includes(u.id) &&
+                (query.trim()
+                  ? u.name.toLowerCase().includes(query.toLowerCase()) ||
+                    (u.department ?? "").toLowerCase().includes(query.toLowerCase()) ||
+                    (u.email ?? "").toLowerCase().includes(query.toLowerCase())
+                  : true),
+            )
+            .slice(0, 8);
+          const showPicker = pickerForBand === b.id;
+
+          return (
+            <Card key={b.id}>
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+                <div>
+                  <CardTitle className="text-sm">Band {i + 1}</CardTitle>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {b.max === null
+                      ? `${formatPKR(b.min)} and above`
+                      : `${formatPKR(b.min)} – ${formatPKR(b.max)}`}
+                  </p>
+                </div>
+                <div className="flex gap-0.5">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(b.id, -1)} disabled={i === 0}><ArrowUp className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => move(b.id, 1)} disabled={i === bands.length - 1}><ArrowDown className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => remove(b.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Min (PKR)</Label>
+                    <Input type="number" value={b.min} onChange={(e) => update(b.id, { min: Number(e.target.value) || 0 })} className="h-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Max (PKR)</Label>
+                    <Input
+                      type="number"
+                      value={b.max ?? ""}
+                      onChange={(e) => update(b.id, { max: e.target.value === "" ? null : Number(e.target.value) })}
+                      placeholder="and above"
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">If multiple users</Label>
+                    <Select value={b.sequence} onValueChange={(v) => update(b.id, { sequence: v as "sequential" | "parallel" })}>
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sequential">Sequential</SelectItem>
+                        <SelectItem value="parallel">Parallel</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Approver(s) for this range <span className="text-destructive">*</span></Label>
+                  <div className="flex flex-wrap gap-1 rounded-md border p-2 min-h-[42px]">
+                    {selectedIds.map((id) => {
+                      const u = users.find((x) => x.id === id);
+                      return (
+                        <Badge key={id} variant="secondary" className="gap-1">
+                          {u?.name ?? id}
+                          <button
+                            type="button"
+                            onClick={() => update(b.id, { approverUserIds: selectedIds.filter((x) => x !== id) })}
+                            aria-label="Remove"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                    <input
+                      className="min-w-[140px] flex-1 border-0 bg-transparent p-1 text-sm outline-none"
+                      placeholder={selectedIds.length ? "Add another user…" : "Search and select user…"}
+                      value={showPicker ? query : ""}
+                      onChange={(e) => {
+                        setPickerForBand(b.id);
+                        setQuery(e.target.value);
+                      }}
+                      onFocus={() => {
+                        setPickerForBand(b.id);
+                        setQuery("");
+                      }}
+                      onBlur={() => {
+                        window.setTimeout(() => {
+                          setPickerForBand((cur) => (cur === b.id ? null : cur));
+                          setQuery("");
+                        }, 150);
+                      }}
+                    />
+                  </div>
+                  {showPicker && (
+                    <div className="max-h-48 overflow-y-auto rounded-md border bg-popover shadow">
+                      {filtered.length > 0 ? (
+                        filtered.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => addUserToBand(b.id, u.id)}
+                          >
+                            <span>{u.name} <span className="text-muted-foreground">— {u.designation || u.email}</span></span>
+                            <span className="text-xs text-muted-foreground">{u.department}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">
+                          {query.trim() ? "No matching users." : "No more users available."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Button variant="outline" size="sm" onClick={add}><Plus className="mr-1 h-3.5 w-3.5" /> Add band</Button>
     </div>
   );
 }
