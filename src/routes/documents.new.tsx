@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { AttachmentIcon } from "@/components/wdas/attachments";
 import { ApprovalFlowChart } from "@/components/wdas/approval-flow-chart";
+import { renderPdfToImages, isPdfFile } from "@/lib/wdas/pdf-to-images";
 import type { Attachment } from "@/lib/wdas/types";
 
 export const Route = createFileRoute("/documents/new")({
@@ -107,6 +108,8 @@ function NewDoc() {
         label: u?.name ?? id,
         sub: u?.designation || u?.department || "Reviewer",
         role: "reviewer" as const,
+        // Reviewers added on the New Document screen belong to the creator.
+        addedBy: `creator-${user.id}`,
       };
     }),
   ];
@@ -313,9 +316,39 @@ function NewDoc() {
     applyFormat("hiliteColor", highlightColor);
   };
 
-  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    event.target.value = "";
+
+    // A PDF added to the content is converted to viewable page images inline.
+    if (isPdfFile(file)) {
+      const toastId = toast.loading(`Converting ${file.name} to images…`);
+      try {
+        const buffer = await file.arrayBuffer();
+        const pages = await renderPdfToImages(buffer);
+        if (!pages.length) {
+          toast.error("Could not read any pages from this PDF.", { id: toastId });
+          return;
+        }
+        for (const pageDataUrl of pages) {
+          applyFormat("insertImage", pageDataUrl);
+        }
+        setAttachments((current) => [
+          ...current,
+          {
+            id: `pdf-${Date.now()}`,
+            name: file.name,
+            type: "pdf",
+            size: `${Math.round(file.size / 1024)} KB`,
+          },
+        ]);
+        toast.success(`Added ${pages.length} page${pages.length > 1 ? "s" : ""} from ${file.name}.`, { id: toastId });
+      } catch {
+        toast.error("Could not convert this PDF.", { id: toastId });
+      }
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -332,7 +365,6 @@ function NewDoc() {
       ]);
     };
     reader.readAsDataURL(file);
-    event.target.value = "";
   };
 
   return (
@@ -349,13 +381,13 @@ function NewDoc() {
         }
       />
 
-      <div className="border-b border-amber-200/70 bg-amber-50/50 px-6 py-5">
+      <div className="border-b border-amber-200/70 bg-amber-50/50 px-6 py-5 dark:border-amber-400/20 dark:bg-amber-400/5">
         <nav className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-4" aria-label="Document creation steps">
           {wizardSteps.map((step, index) => (
             <a
               key={step.number}
               href={step.href}
-              className="group flex items-center gap-3 rounded-xl border border-amber-200 bg-white px-3 py-3 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-50"
+              className="group flex items-center gap-3 rounded-xl border border-amber-200 bg-white px-3 py-3 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-amber-400/20 dark:bg-card dark:hover:bg-amber-400/10"
             >
               <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                 step.complete ? "bg-amber-500 text-stone-950" : "bg-stone-900 text-amber-100"
@@ -484,9 +516,9 @@ function NewDoc() {
                 </div>
 
                 <div className="pt-3">
-                  <Label>Reviewers</Label>
+                  <Label>Reviewer</Label>
                   <p className="text-xs text-muted-foreground">
-                    Optional. Reviewers receive the document to review — they do not approve or reject it.
+                    Optional. You can add one reviewer — they receive the document to review but do not approve or reject it.
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1 rounded-md border p-2">
                     {reviewerIds.map((id) => {
@@ -500,18 +532,20 @@ function NewDoc() {
                         </Badge>
                       );
                     })}
-                    <input
-                      className="min-w-[120px] w-full flex-1 border-0 bg-transparent p-1 text-sm outline-none"
-                      placeholder={reviewerIds.length ? "Add another reviewer…" : "Search or pick reviewers…"}
-                      value={reviewerQuery}
-                      onChange={(e) => setReviewerQuery(e.target.value)}
-                      onFocus={() => setReviewerFocused(true)}
-                      onBlur={() => {
-                        window.setTimeout(() => setReviewerFocused(false), 150);
-                      }}
-                    />
+                    {reviewerIds.length === 0 && (
+                      <input
+                        className="min-w-[120px] w-full flex-1 border-0 bg-transparent p-1 text-sm outline-none"
+                        placeholder="Search or pick a reviewer…"
+                        value={reviewerQuery}
+                        onChange={(e) => setReviewerQuery(e.target.value)}
+                        onFocus={() => setReviewerFocused(true)}
+                        onBlur={() => {
+                          window.setTimeout(() => setReviewerFocused(false), 150);
+                        }}
+                      />
+                    )}
                   </div>
-                  {showReviewerPicker && (
+                  {reviewerIds.length === 0 && showReviewerPicker && (
                     <div className="mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow">
                       {usersLoading ? (
                         <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
@@ -652,7 +686,7 @@ function NewDoc() {
               </div>
             </div>
             <CardContent className="space-y-2 pt-4">
-              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              <input ref={imageInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleImageUpload} />
               <div className="relative">
                 {!editorFocused && editorEmpty && (
                   <p className="pointer-events-none absolute inset-x-4 top-4 z-10 text-sm leading-7 text-muted-foreground">
@@ -666,7 +700,7 @@ function NewDoc() {
                   onFocus={() => setEditorFocused(true)}
                   onBlur={handleEditorBlur}
                   onInput={handleEditorInput}
-                  className="min-h-[320px] rounded-md border bg-card p-4 text-sm leading-7 outline-none focus:ring-2 focus:ring-amber-400 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_blockquote]:rounded-md [&_blockquote]:border-l-4 [&_blockquote]:border-amber-400 [&_blockquote]:bg-amber-50 [&_blockquote]:p-3 [&_table]:w-full [&_table]:border-collapse [&_table_td]:border [&_table_td]:border-border [&_table_td]:p-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
+                  className="min-h-[320px] rounded-md border bg-card p-4 text-sm leading-7 outline-none focus:ring-2 focus:ring-amber-400 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_blockquote]:rounded-md [&_blockquote]:border-l-4 [&_blockquote]:border-amber-400 [&_blockquote]:bg-amber-50 [&_blockquote]:p-3 [&_table]:w-full [&_table]:border-collapse [&_table_td]:border [&_table_td]:border-border [&_table_td]:p-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_img]:my-2 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded [&_img]:border [&_img]:border-border"
                 />
               </div>
             </CardContent>

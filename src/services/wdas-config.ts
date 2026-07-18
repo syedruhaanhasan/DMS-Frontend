@@ -3,6 +3,7 @@ import type {
   ApiApproverGroupDto,
   ApiDelegationDto,
   ApiDocumentTypeDto,
+  ApiUserTypeDto,
   ApiExternalApproverListItemDto,
   ApiExternalApproverSessionDto,
   ApiMatrixTierDto,
@@ -36,6 +37,24 @@ export interface ActiveDirectorySettings {
 
 export interface ActiveDirectoryStatus {
   enabled: boolean;
+}
+
+export interface UserTypeItem {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  isActive: boolean;
+}
+
+function mapUserType(dto: ApiUserTypeDto): UserTypeItem {
+  return {
+    id: dto.id,
+    name: dto.name,
+    code: dto.code,
+    description: dto.description ?? undefined,
+    isActive: dto.isActive,
+  };
 }
 
 function withIsActiveQuery(path: string, isActive?: boolean): string {
@@ -228,6 +247,7 @@ export const wdasConfig = {
       departmentId: string;
       roleIds: string[];
       isActive?: boolean;
+      userTypeId?: string | null;
     },
   ) => {
     const dto = await api.put<ApiUserSummaryDto>(`/api/users/${userId}`, {
@@ -239,6 +259,7 @@ export const wdasConfig = {
       departmentId: input.departmentId,
       roleIds: input.roleIds,
       isActive: input.isActive,
+      userTypeId: input.userTypeId ?? null,
     });
     return mapUser(dto);
   },
@@ -360,6 +381,39 @@ export const wdasConfig = {
     await api.delete(`/api/document-types/${documentTypeId}`);
   },
 
+  listUserTypes: async (isActive?: boolean): Promise<UserTypeItem[]> => {
+    const params = new URLSearchParams();
+    if (isActive !== undefined) params.set("isActive", String(isActive));
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    const rows = await api.get<ApiUserTypeDto[]>(`/api/user-types${qs}`);
+    return rows.map(mapUserType);
+  },
+
+  createUserType: async (input: { name: string; code: string; description?: string }): Promise<UserTypeItem> => {
+    const dto = await api.post<ApiUserTypeDto>("/api/user-types", {
+      name: input.name,
+      code: input.code,
+      description: input.description ?? null,
+    });
+    return mapUserType(dto);
+  },
+
+  updateUserType: async (
+    userTypeId: string,
+    input: { name?: string; description?: string; isActive?: boolean },
+  ): Promise<UserTypeItem> => {
+    const dto = await api.put<ApiUserTypeDto>(`/api/user-types/${userTypeId}`, {
+      name: input.name,
+      description: input.description ?? null,
+      isActive: input.isActive,
+    });
+    return mapUserType(dto);
+  },
+
+  deleteUserType: async (userTypeId: string) => {
+    await api.delete(`/api/user-types/${userTypeId}`);
+  },
+
   deleteWorkflow: async (workflowId: string) => {
     await api.delete(`/api/workflows/${workflowId}`);
   },
@@ -381,6 +435,7 @@ export const wdasConfig = {
     roleIds: string[];
     accountType: "local" | "ad";
     adObjectId?: string;
+    userTypeId?: string | null;
   }) => {
     const dto = await api.post<ApiUserSummaryDto>("/api/users", {
       userPrincipalName: input.username,
@@ -392,6 +447,7 @@ export const wdasConfig = {
       roleIds: input.roleIds,
       accountType: input.accountType === "ad" ? "ActiveDirectory" : "Local",
       adObjectId: input.accountType === "ad" ? input.adObjectId : null,
+      userTypeId: input.userTypeId ?? null,
     });
     return mapUser(dto);
   },

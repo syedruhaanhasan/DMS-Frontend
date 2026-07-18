@@ -1,4 +1,4 @@
-﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/wdas/page-header";
@@ -475,15 +475,15 @@ function NotificationsStep({ wf, setWf }: { wf: Partial<Workflow>; setWf: (v: Pa
   const n = wf.notifications ?? defaultNotifications;
   const events: (keyof NotificationSettings)[] = ["submit", "approve", "reject", "reminder"];
   const eventLabel: Record<keyof NotificationSettings, string> = { submit: "Document submitted", approve: "Approved / step passed", reject: "Rejected", reminder: "SLA reminder" };
-  const channels: ("email" | "inApp" | "sms")[] = ["email", "inApp", "sms"];
-  const channelLabel = { email: "Email", inApp: "In-app", sms: "SMS / WhatsApp" };
+  const channels: ("email" | "inApp")[] = ["email", "inApp"];
+  const channelLabel = { email: "Email", inApp: "In-app" };
   return (
     <div className="rounded-md border">
-      <div className="grid grid-cols-[1fr_120px_120px_140px] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-        <span>Event</span><span>Email</span><span>In-app</span><span>SMS / WhatsApp</span>
+      <div className="grid grid-cols-[1fr_120px_120px] items-center gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
+        <span>Event</span><span>Email</span><span>In-app</span>
       </div>
       {events.map((ev) => (
-        <div key={ev} className="grid grid-cols-[1fr_120px_120px_140px] items-center gap-2 border-b px-3 py-2 last:border-0">
+        <div key={ev} className="grid grid-cols-[1fr_120px_120px] items-center gap-2 border-b px-3 py-2 last:border-0">
           <span className="text-sm">{eventLabel[ev]}</span>
           {channels.map((ch) => (
             <Switch
@@ -497,7 +497,7 @@ function NotificationsStep({ wf, setWf }: { wf: Partial<Workflow>; setWf: (v: Pa
           ))}
         </div>
       ))}
-      <p className="p-3 text-[11px] text-muted-foreground">{channelLabel.email} / {channelLabel.inApp} / {channelLabel.sms} channels â€” toggle per event.</p>
+      <p className="p-3 text-[11px] text-muted-foreground">{channelLabel.email} / {channelLabel.inApp} channels — toggle per event.</p>
     </div>
   );
 }

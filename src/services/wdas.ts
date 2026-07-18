@@ -108,6 +108,14 @@ export const wdas = {
     return searchDocuments(filter);
   },
 
+  /** Documents where the current user is an informational reviewer (added by creator or an approver). */
+  listReviewDocuments: async (): Promise<Document[]> => {
+    const data = await api.get<import("@/lib/api/types").ApiDashboardDocumentItemDto[]>(
+      "/api/dashboard/for-review",
+    );
+    return data.map((d) => mapDashboardItem(d));
+  },
+
   getDocument: async (id: string): Promise<Document> => {
     const [dto, attachments] = await Promise.all([
       api.get<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${id}`),
@@ -134,10 +142,17 @@ export const wdas = {
     const reviewerNames =
       input.reviewerNames ??
       (reviewerIds.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean) as string[]);
-    const recipients = reviewerNames.map((name) => {
-      const u = users.find((x) => x.name === name);
-      return { recipientName: name, recipientEmail: u?.email ?? null };
-    });
+    // Prefer building recipients from reviewer user ids so the backend can link them to a
+    // known user (view access, notifications, and the "For Review" list all depend on this).
+    const recipients = reviewerIds.length
+      ? reviewerIds.map((id) => {
+          const u = users.find((x) => x.id === id);
+          return { recipientName: u?.name ?? id, recipientEmail: u?.email ?? null, reviewerUserId: id };
+        })
+      : reviewerNames.map((name) => {
+          const u = users.find((x) => x.name === name);
+          return { recipientName: name, recipientEmail: u?.email ?? null, reviewerUserId: u?.id ?? null };
+        });
     const priority = toApiPriority(input.priority as Priority);
     // Attachments are only allowed on drafts — create first, upload, then submit.
     const shouldDeferSubmit = submit && pendingFiles.length > 0;
@@ -205,6 +220,15 @@ export const wdas = {
 
     const path = `/api/workflow-steps/${stepId}/${action}`;
     const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(path, { comment: comment || null });
+    return mapDocument(dto);
+  },
+
+  /** Current approver adds one informational reviewer (they receive/view the doc, no approval authority). */
+  addReviewer: async (id: string, reviewerUserId: string): Promise<Document> => {
+    const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(
+      `/api/documents/${id}/reviewers`,
+      { reviewerUserId },
+    );
     return mapDocument(dto);
   },
 

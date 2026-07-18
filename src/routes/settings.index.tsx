@@ -155,13 +155,13 @@ function SettingsPage() {
               <CardDescription>{lang === "en" ? "Choose how you want to be notified for each event." : "ہر ایونٹ کے لیے اطلاعات کا طریقہ منتخب کریں۔"}</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="grid grid-cols-[1fr_90px_90px_130px] items-center gap-2 border-y bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
-                <span>Event</span><span>Email</span><span>In-app</span><span>SMS / WhatsApp</span>
+              <div className="grid grid-cols-[1fr_90px_90px] items-center gap-2 border-y bg-muted/50 px-4 py-2 text-xs font-medium text-muted-foreground">
+                <span>Event</span><span>Email</span><span>In-app</span>
               </div>
               {events.map((ev) => (
-                <div key={ev.key} className="grid grid-cols-[1fr_90px_90px_130px] items-center gap-2 border-b px-4 py-2.5 last:border-0">
+                <div key={ev.key} className="grid grid-cols-[1fr_90px_90px] items-center gap-2 border-b px-4 py-2.5 last:border-0">
                   <span className="text-sm">{ev.label}</span>
-                  {(["email", "inApp", "sms"] as Channel[]).map((ch) => (
+                  {(["email", "inApp"] as Channel[]).map((ch) => (
                     <Switch
                       key={ch}
                       checked={prefs[ev.key][ch]}

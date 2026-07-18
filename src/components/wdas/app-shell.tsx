@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Inbox, FileText, FilePlus, FolderSearch,
   BarChart3, Search, ChevronLeft, ChevronRight, LogOut, Settings,
   Workflow as WorkflowIcon, GitBranch, Mail, UserPlus, ChevronDown, UserCog, Building2, Network, FileType,
-  Sun, Moon, Plus, Shield, ScrollText, Activity,
+  Sun, Moon, Plus, Shield, ScrollText, IdCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, ROLE_LABEL, isSuperAdmin } from "@/lib/wdas/role-context";
@@ -34,7 +34,6 @@ const MAIN_NAV: NavItem[] = [
   { to: "/repository", labelKey: "repository", icon: FolderSearch, permission: P.nav.repository },
   { to: "/reports", labelKey: "reports", icon: BarChart3, permission: P.nav.reports },
   { to: "/audit-log", labelKey: "auditLog", icon: ScrollText, permission: P.actions.reportsView },
-  { to: "/activity-log", labelKey: "activityLog", icon: Activity, permission: P.actions.reportsView },
 ];
 
 const CONFIG_GROUP: NavGroup = {
@@ -43,6 +42,7 @@ const CONFIG_GROUP: NavGroup = {
   items: [
     { to: "/config/departments", labelKey: "departments", icon: Building2, permission: P.config.departments },
     { to: "/config/users", labelKey: "users", icon: UserPlus, permission: P.config.users },
+    { to: "/config/user-types", labelKey: "userTypes", icon: IdCard, permission: P.config.users },
     { to: "/config/roles", labelKey: "roles", icon: Shield, permission: P.config.roles },
     { to: "/config/active-directory", labelKey: "activeDirectory", icon: Network, permission: P.config.ad },
     { to: "/config/workflows", labelKey: "workflows", icon: WorkflowIcon, permission: P.config.workflows },

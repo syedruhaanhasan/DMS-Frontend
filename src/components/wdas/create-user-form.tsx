@@ -38,8 +38,11 @@ export function CreateUserForm({
   const [email, setEmail] = useState("");
   const [title, setTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
+  const [userTypeId, setUserTypeId] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const NO_USER_TYPE = "__none__";
 
   const isAdAccount = accountType === "ad";
 
@@ -56,6 +59,11 @@ export function CreateUserForm({
   const rolesQ = useQuery({
     queryKey: ["security-roles"],
     queryFn: () => wdasConfig.listRoles(),
+  });
+
+  const userTypesQ = useQuery({
+    queryKey: ["user-types", "active"],
+    queryFn: () => wdasConfig.listUserTypes(true),
   });
 
   const emailError = useMemo(
@@ -86,6 +94,7 @@ export function CreateUserForm({
     const maker = rolesQ.data?.find((r) => r.code === "MakerOwner") ?? rolesQ.data?.[0];
     setRoleIds(maker ? [maker.id] : []);
     setDepartmentId(departments.data?.[0]?.id ?? "");
+    setUserTypeId("");
   };
 
   const submit = async () => {
@@ -122,6 +131,7 @@ export function CreateUserForm({
         departmentId,
         roleIds,
         accountType,
+        userTypeId: userTypeId || null,
       });
       toast.success("User created successfully", {
         description: isAdAccount
@@ -176,13 +186,28 @@ export function CreateUserForm({
           <Label>Title</Label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Staff" />
         </div>
-        <div className="space-y-2 sm:col-span-2">
+        <div className="space-y-2">
           <Label>Department *</Label>
           <Select value={departmentId} onValueChange={setDepartmentId}>
             <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
             <SelectContent>
               {(departments.data ?? []).map((d) => (
                 <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>User type</Label>
+          <Select
+            value={userTypeId || NO_USER_TYPE}
+            onValueChange={(v) => setUserTypeId(v === NO_USER_TYPE ? "" : v)}
+          >
+            <SelectTrigger><SelectValue placeholder="Select user type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_USER_TYPE}>None</SelectItem>
+              {(userTypesQ.data ?? []).map((ut) => (
+                <SelectItem key={ut.id} value={ut.id}>{ut.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>

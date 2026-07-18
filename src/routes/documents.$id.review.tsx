@@ -9,6 +9,7 @@ import { getToken, ApiError } from "@/lib/api/client";
 import { apiPath } from "@/lib/api/client";
 import { StatusBadge, SlaBadge, PriorityBadge } from "@/components/wdas/badges";
 import { ApprovalTrail } from "@/components/wdas/approval-trail";
+import { ApprovalFlowChart, buildDocumentFlowNodes } from "@/components/wdas/approval-flow-chart";
 import { WorkflowStepper } from "@/components/wdas/workflow-stepper";
 import { CommentThread } from "@/components/wdas/comment-thread";
 import { AttachmentList } from "@/components/wdas/attachments";
@@ -16,6 +17,7 @@ import { LoadingState, ErrorState } from "@/components/wdas/data-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { formatPKR } from "@/lib/wdas/format";
@@ -25,10 +27,12 @@ import {
   ArrowLeft,
   Check,
   Clock3,
+  Eye,
   FileText,
   Paperclip,
   RotateCcw,
   ShieldCheck,
+  UserPlus,
   X,
 } from "lucide-react";
 
@@ -48,6 +52,9 @@ function ReviewPage() {
   const owner = useUserById(q.data?.ownerId);
   const [comment, setComment] = useState("");
   const [confirm, setConfirm] = useState<"approve" | "reject" | "return" | null>(null);
+  const [reviewerQuery, setReviewerQuery] = useState("");
+  const [reviewerFocused, setReviewerFocused] = useState(false);
+  const [addingReviewer, setAddingReviewer] = useState(false);
 
   useEffect(() => {
     if (q.data && user.id && q.data.ownerId === user.id) {
@@ -67,6 +74,22 @@ function ReviewPage() {
   const isYourTurn =
     currentStep?.approverId === user.id &&
     (doc.status === "pending" || doc.status === "ready_to_finalize");
+
+  const reviewers = doc.reviewers ?? [];
+  const alreadyAddedByMe = reviewers.some((r) => r.addedById === user.id);
+  const canAddReviewer = isYourTurn && !alreadyAddedByMe;
+  const reviewerCandidates = users.filter((u) => {
+    if (u.id === user.id) return false;
+    if (reviewers.some((r) => r.userId === u.id)) return false;
+    if (!reviewerQuery.trim()) return true;
+    const query = reviewerQuery.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(query) ||
+      (u.designation ?? "").toLowerCase().includes(query) ||
+      (u.department ?? "").toLowerCase().includes(query)
+    );
+  });
+  const showReviewerPicker = reviewerFocused || reviewerQuery.trim().length > 0;
 
   const previewAttachment = async (attachmentId: string) => {
     try {
@@ -94,6 +117,22 @@ function ReviewPage() {
       toast.success("Comment saved");
     } catch (e) {
       toast.error((e as Error).message);
+    }
+  };
+
+  const addReviewer = async (reviewerUserId: string) => {
+    setAddingReviewer(true);
+    try {
+      const updated = await wdas.addReviewer(doc.id, reviewerUserId);
+      await refreshWorkflowViews(qc, { userId: user.id, document: updated });
+      await q.refetch();
+      setReviewerQuery("");
+      setReviewerFocused(false);
+      toast.success("Reviewer added");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAddingReviewer(false);
     }
   };
 
@@ -207,6 +246,106 @@ function ReviewPage() {
             </CardHeader>
             <CardContent className="pt-5">
               <WorkflowStepper steps={doc.steps} currentStepId={doc.currentStepId} compact />
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="border-b py-3">
+              <CardTitle className="text-sm">Sequence chart</CardTitle>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Each reviewer appears right after whoever added them.
+              </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <ApprovalFlowChart nodes={buildDocumentFlowNodes(doc, users)} mode="sequential" />
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="border-b py-3">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Eye className="h-4 w-4 text-muted-foreground" /> Reviewers
+              </CardTitle>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Informational recipients — they can view the document but do not approve or reject it.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-4">
+              {reviewers.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {reviewers.map((r) => {
+                    const addedBy = r.addedById ? users.find((u) => u.id === r.addedById) : undefined;
+                    return (
+                      <li
+                        key={r.id}
+                        className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/30 px-2.5 py-1.5 text-sm"
+                      >
+                        <span className="min-w-0 truncate">{r.name}</span>
+                        {addedBy && (
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            added by {addedBy.id === user.id ? "you" : addedBy.name}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">No reviewers yet.</p>
+              )}
+
+              {isYourTurn && (
+                alreadyAddedByMe ? (
+                  <p className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground">
+                    You have already added your reviewer for this document.
+                  </p>
+                ) : (
+                  <div className="relative">
+                    <div className="relative">
+                      <UserPlus className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        className="pl-8"
+                        placeholder="Add a reviewer…"
+                        value={reviewerQuery}
+                        onChange={(e) => setReviewerQuery(e.target.value)}
+                        onFocus={() => setReviewerFocused(true)}
+                        onBlur={() => window.setTimeout(() => setReviewerFocused(false), 150)}
+                        disabled={addingReviewer}
+                      />
+                    </div>
+                    {showReviewerPicker && (
+                      <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+                        {reviewerCandidates.length > 0 ? (
+                          reviewerCandidates.slice(0, 25).map((u) => (
+                            <button
+                              key={u.id}
+                              type="button"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/60 disabled:opacity-50"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => void addReviewer(u.id)}
+                              disabled={addingReviewer}
+                            >
+                              <span className="flex-1 truncate">
+                                <span className="font-medium">{u.name}</span>
+                                {(u.designation || u.department) && (
+                                  <span className="text-muted-foreground">
+                                    {" "}
+                                    · {u.designation || u.department}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="px-3 py-2 text-xs text-muted-foreground">
+                            {reviewerQuery.trim() ? "No matching users." : "No other active users available."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              )}
             </CardContent>
           </Card>
 

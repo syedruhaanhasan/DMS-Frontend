@@ -8,6 +8,7 @@ import { useDocumentQuery, useCanFetchDocuments } from "@/lib/wdas/use-document-
 import { useUserById, useUsers } from "@/lib/wdas/users-context";
 import { StatusBadge, SlaBadge, PriorityBadge } from "@/components/wdas/badges";
 import { ApprovalTrail } from "@/components/wdas/approval-trail";
+import { ApprovalFlowChart, buildDocumentFlowNodes } from "@/components/wdas/approval-flow-chart";
 import { WorkflowStepper } from "@/components/wdas/workflow-stepper";
 import { CommentThread } from "@/components/wdas/comment-thread";
 import { AttachmentList } from "@/components/wdas/attachments";
@@ -558,6 +559,18 @@ function DetailPage() {
               {doc.submittedAt && <Row label="Submitted" value={absTime(doc.submittedAt)} />}
               {doc.finalizedAt && <Row label="Finalized" value={absTime(doc.finalizedAt)} />}
               {doc.cancelReason && <Row label="Cancel reason" value={doc.cancelReason} />}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="border-b py-3">
+              <CardTitle className="text-sm">Sequence chart</CardTitle>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Reviewers appear right after whoever added them.
+              </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <ApprovalFlowChart nodes={buildDocumentFlowNodes(doc, users)} mode="sequential" />
             </CardContent>
           </Card>
 

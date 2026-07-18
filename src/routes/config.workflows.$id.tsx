@@ -1,4 +1,4 @@
-﻿import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
@@ -312,7 +312,7 @@ function WorkflowDetail() {
               {(["submit", "approve", "reject", "reminder"] as const).map((event) => (
                 <div key={event} className="flex flex-wrap items-center gap-4 rounded-md border px-3 py-2 text-sm">
                   <span className="w-28 font-medium capitalize">{event}</span>
-                  {(["email", "inApp", "sms"] as const).map((ch) => (
+                  {(["email", "inApp"] as const).map((ch) => (
                     <label key={ch} className="flex items-center gap-1.5 text-xs">
                       <Switch
                         checked={notifications[event][ch]}

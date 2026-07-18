@@ -178,6 +178,8 @@ export function mapUser(dto: ApiUserSummaryDto): User {
     appRoles: mapAppRoles(dto.roles as never),
     roleIds,
     permissions: dto.permissions ?? [],
+    userTypeId: dto.userTypeId ?? undefined,
+    userTypeName: dto.userTypeName ?? undefined,
   };
 }
 
@@ -288,6 +290,13 @@ export function mapDocument(
     currentStepId: apiIdOpt(activeStep?.id),
     steps,
     attachments,
+    reviewers: (dto.recipients ?? []).map((r) => ({
+      id: apiId(r.id),
+      name: r.recipientName,
+      email: r.recipientEmail ?? undefined,
+      userId: r.reviewerUserId ? apiId(r.reviewerUserId) : undefined,
+      addedById: r.addedById ? apiId(r.addedById) : undefined,
+    })),
     refId: documentRefId(dto.recordNumber),
     recordNumber: dto.recordNumber,
     revisionNumber: dto.revisionNumber && dto.revisionNumber > 0 ? dto.revisionNumber : 1,
@@ -317,6 +326,8 @@ export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: str
     currentStepId: apiIdOpt(dto.activeStepId),
     steps: [],
     attachments: [],
+    reviewers: [],
+    seenByApprover: dto.activeStepSeenByApprover ?? false,
   };
 }
 
@@ -342,6 +353,7 @@ export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
     sla: "on_time",
     steps: [],
     attachments: [],
+    reviewers: [],
   };
 }
 

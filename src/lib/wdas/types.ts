@@ -44,6 +44,9 @@ export interface User {
   permissions?: string[];
   status?: UserStatus;
   isActive?: boolean;
+  /** Configurable user classification (metadata), bound to the user. */
+  userTypeId?: string;
+  userTypeName?: string;
 }
 
 /* ================= Configuration types ================= */
@@ -163,7 +166,20 @@ export interface Document {
   currentStepId?: string;
   steps: ApprovalStep[];
   attachments: Attachment[];
+  reviewers: DocumentReviewer[];
   cancelReason?: string;
+  /** True once the active step's approver has opened (read) the document. */
+  seenByApprover?: boolean;
+}
+
+export interface DocumentReviewer {
+  id: string;
+  name: string;
+  email?: string;
+  /** Directory user id, when the reviewer is a known user. */
+  userId?: string;
+  /** User who added this reviewer (creator at creation, or an approver during approval). */
+  addedById?: string;
 }
 
 /* ============== External approvers & Delegation ============== */

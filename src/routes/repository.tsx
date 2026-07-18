@@ -197,7 +197,7 @@ function Repository() {
   };
 
   return (
-    <div className="min-h-full bg-slate-100/70">
+    <div className="min-h-full bg-background">
       <header className="relative overflow-hidden border-b border-slate-800 bg-slate-950 px-6 py-7 text-white sm:px-8">
         <div className="absolute right-8 top-0 h-44 w-44 rounded-full bg-amber-400/10 blur-3xl" />
         <div className="relative mx-auto max-w-[1500px]">
@@ -306,13 +306,13 @@ function Repository() {
         </aside>
 
         <main className="min-w-0 space-y-4">
-          <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <Card className="overflow-hidden border-border shadow-sm">
             <Collapsible open={expanded} onOpenChange={setExpanded}>
               <CollapsibleTrigger asChild>
-                <button className="flex w-full items-center justify-between border-b border-slate-200 px-5 py-4 text-left hover:bg-amber-50/50">
+                <button className="flex w-full items-center justify-between border-b border-border px-5 py-4 text-left hover:bg-amber-50/50 dark:hover:bg-amber-400/10">
                   <div className="flex items-center gap-2.5">
                     <SlidersHorizontal className="h-4 w-4 text-amber-600" />
-                    <p className="text-sm font-semibold text-slate-950">Advanced search</p>
+                    <p className="text-sm font-semibold text-foreground">Advanced search</p>
                     {allFiltersCount > 0 && (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
                         {allFiltersCount} active
@@ -321,14 +321,14 @@ function Repository() {
                   </div>
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 text-slate-500 transition-transform",
+                      "h-4 w-4 text-muted-foreground transition-transform",
                       !expanded && "-rotate-90",
                     )}
                   />
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="grid gap-3 bg-white p-5 md:grid-cols-3 xl:grid-cols-4">
+                <CardContent className="grid gap-3 bg-card p-5 md:grid-cols-3 xl:grid-cols-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Document ID / Ref</Label>
                     <Input
@@ -473,7 +473,7 @@ function Repository() {
                     >
                       <X className="mr-1 h-3.5 w-3.5" /> Clear filters
                     </Button>
-                    <p className="ml-auto text-xs text-slate-500">
+                    <p className="ml-auto text-xs text-muted-foreground">
                       Showing {filtered.length} of {q.data?.length ?? 0} documents
                     </p>
                   </div>
@@ -482,8 +482,8 @@ function Repository() {
             </Collapsible>
           </Card>
 
-          <Card className="overflow-hidden border-slate-200 shadow-sm">
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-950 px-4 py-3 text-white">
+          <Card className="overflow-hidden border-border shadow-sm">
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950 px-4 py-3 text-white">
               <Button
                 variant="ghost"
                 size="sm"
@@ -548,10 +548,10 @@ function Repository() {
                       <article
                         key={doc.id}
                         className={cn(
-                          "group relative rounded-xl border bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md",
+                          "group relative rounded-xl border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md",
                           selected.has(doc.id)
-                            ? "border-amber-400 ring-2 ring-amber-100"
-                            : "border-slate-200",
+                            ? "border-amber-400 ring-2 ring-amber-100 dark:ring-amber-400/20"
+                            : "border-border",
                         )}
                       >
                         <div className="flex items-start gap-3">
@@ -571,35 +571,35 @@ function Repository() {
                             <Link
                               to={linkTo}
                               params={{ id: doc.id }}
-                              className="line-clamp-2 font-semibold text-slate-950 hover:text-amber-700 hover:underline"
+                              className="line-clamp-2 font-semibold text-foreground hover:text-amber-700 hover:underline"
                             >
                               {doc.subject}
                             </Link>
-                            <p className="mt-1 font-mono text-[11px] text-slate-500">
+                            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
                               {doc.refId ?? doc.id}
                             </p>
-                            <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-slate-100 pt-3 text-xs">
+                            <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
                               <div>
-                                <dt className="text-slate-400">Owner</dt>
-                                <dd className="mt-0.5 truncate font-medium text-slate-700">
+                                <dt className="text-muted-foreground">Owner</dt>
+                                <dd className="mt-0.5 truncate font-medium text-foreground">
                                   {doc.ownerName ?? owner?.name ?? "—"}
                                 </dd>
                               </div>
                               <div>
-                                <dt className="text-slate-400">Department</dt>
-                                <dd className="mt-0.5 truncate font-medium text-slate-700">
+                                <dt className="text-muted-foreground">Department</dt>
+                                <dd className="mt-0.5 truncate font-medium text-foreground">
                                   {owner?.department ?? "—"}
                                 </dd>
                               </div>
                               <div>
-                                <dt className="text-slate-400">Created</dt>
-                                <dd className="mt-0.5 font-medium text-slate-700">
+                                <dt className="text-muted-foreground">Created</dt>
+                                <dd className="mt-0.5 font-medium text-foreground">
                                   {new Date(doc.createdAt).toLocaleDateString()}
                                 </dd>
                               </div>
                               <div>
-                                <dt className="text-slate-400">Amount</dt>
-                                <dd className="mt-0.5 truncate font-mono font-medium text-slate-700">
+                                <dt className="text-muted-foreground">Amount</dt>
+                                <dd className="mt-0.5 truncate font-mono font-medium text-foreground">
                                   {formatPKR(doc.amount)}
                                 </dd>
                               </div>
@@ -614,7 +614,7 @@ function Repository() {
             </CardContent>
           </Card>
 
-          <p className="text-center text-xs text-slate-500">
+          <p className="text-center text-xs text-muted-foreground">
             Looking for a document awaiting your action? Check your{" "}
             <Link to="/inbox" className="font-medium text-amber-700 hover:underline">
               inbox

@@ -27,13 +27,22 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
+  const [userTypeId, setUserTypeId] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const NO_USER_TYPE = "__none__";
+
   const departments = useQuery({
     queryKey: ["departments"],
     queryFn: () => wdasConfig.listDepartments(true),
+    enabled: open,
+  });
+
+  const userTypesQ = useQuery({
+    queryKey: ["user-types", "active"],
+    queryFn: () => wdasConfig.listUserTypes(true),
     enabled: open,
   });
 
@@ -51,6 +60,7 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
     setPhone(user.phone ?? "");
     setTitle(user.designation ?? "");
     setDepartmentId(user.departmentId ?? "");
+    setUserTypeId(user.userTypeId ?? "");
     setRoleIds(user.roleIds?.length ? [...user.roleIds] : []);
     setIsActive(user.isActive !== false);
   }, [user]);
@@ -87,6 +97,7 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
         departmentId,
         roleIds,
         isActive,
+        userTypeId: userTypeId || null,
       });
       toast.success("User updated", { description: displayName.trim() });
       onSaved();
@@ -138,6 +149,22 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
                 <SelectContent>
                   {(departments.data ?? []).map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>User type</Label>
+              <Select
+                value={userTypeId || NO_USER_TYPE}
+                onValueChange={(v) => setUserTypeId(v === NO_USER_TYPE ? "" : v)}
+                disabled={saving}
+              >
+                <SelectTrigger><SelectValue placeholder="Select user type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_USER_TYPE}>None</SelectItem>
+                  {(userTypesQ.data ?? []).map((ut) => (
+                    <SelectItem key={ut.id} value={ut.id}>{ut.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

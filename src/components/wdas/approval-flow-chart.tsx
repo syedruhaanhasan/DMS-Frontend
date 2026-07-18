@@ -1,13 +1,68 @@
 import { cn } from "@/lib/utils";
 import { Eye, FilePenLine, GripVertical, UserRoundCheck, Users } from "lucide-react";
 import { useState } from "react";
+import type { Document, User } from "@/lib/wdas/types";
 
 export type ApprovalFlowNode = {
   id: string;
   label: string;
   sub?: string;
   role: "creator" | "approver" | "reviewer";
+  /**
+   * For reviewers: the id of the node (creator or an approver) that added them.
+   * The reviewer card renders immediately after that node. Defaults to the creator.
+   */
+  addedBy?: string;
 };
+
+/**
+ * Builds sequence-chart nodes from a live document: creator, then the approvers in
+ * step order, with each reviewer attached to whoever added them (creator or approver).
+ */
+export function buildDocumentFlowNodes(doc: Document, users: User[]): ApprovalFlowNode[] {
+  const creatorNodeId = `creator-${doc.ownerId}`;
+  const approverNodeId = (approverId: string) => `approver-${approverId}`;
+  const ownerUser = users.find((u) => u.id === doc.ownerId);
+
+  const nodes: ApprovalFlowNode[] = [
+    {
+      id: creatorNodeId,
+      label: doc.ownerName ?? ownerUser?.name ?? "Creator",
+      sub: ownerUser?.designation || ownerUser?.department || "Document owner",
+      role: "creator",
+    },
+  ];
+
+  const seenApprovers = new Set<string>();
+  for (const step of [...doc.steps].sort((a, b) => a.order - b.order)) {
+    if (!step.approverId || seenApprovers.has(step.approverId)) continue;
+    seenApprovers.add(step.approverId);
+    const u = users.find((x) => x.id === step.approverId);
+    nodes.push({
+      id: approverNodeId(step.approverId),
+      label: u?.name ?? step.approverId,
+      sub: u?.designation || u?.department || "Approver",
+      role: "approver",
+    });
+  }
+
+  for (const reviewer of doc.reviewers ?? []) {
+    const addedBy =
+      reviewer.addedById && reviewer.addedById !== doc.ownerId
+        ? approverNodeId(reviewer.addedById)
+        : creatorNodeId;
+    const u = reviewer.userId ? users.find((x) => x.id === reviewer.userId) : undefined;
+    nodes.push({
+      id: `reviewer-${reviewer.id}`,
+      label: reviewer.name || u?.name || "Reviewer",
+      sub: u?.designation || u?.department || "Reviewer",
+      role: "reviewer",
+      addedBy,
+    });
+  }
+
+  return nodes;
+}
 
 interface Props {
   nodes: ApprovalFlowNode[];
@@ -40,16 +95,25 @@ export function ApprovalFlowChart({ nodes, mode = "sequential", onReorder, class
   const approvers = nodes.filter((n) => n.role === "approver");
   const reviewers = nodes.filter((n) => n.role === "reviewer");
 
+  // Reviewers render right after whoever added them (creator or a specific approver).
+  const reviewersAddedBy = (parentId: string | undefined) =>
+    reviewers.filter((r) => (r.addedBy ?? creator?.id) === parentId);
+  const creatorReviewers = creator ? reviewersAddedBy(creator.id) : [];
+
   if (mode === "parallel" && approvers.length > 0) {
+    const clusterReviewers = reviewers.filter((r) => !creatorReviewers.includes(r));
     return (
-      <div className={cn("space-y-3 rounded-lg border border-amber-200 bg-white p-4", className)} aria-label="Sequence chart">
-        <div className="flex items-center gap-2 text-xs font-medium text-amber-800">
+      <div className={cn("space-y-3 rounded-lg border border-amber-200 bg-white p-4 dark:border-amber-400/20 dark:bg-card", className)} aria-label="Sequence chart">
+        <div className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
           <Users className="h-3.5 w-3.5" />
           Parallel routing — all approvers receive the document together
         </div>
         <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-stretch sm:justify-center sm:gap-3">
           {creator && <FlowCard node={creator} index={0} />}
-          {creator && (approvers.length > 0 || reviewers.length > 0) && (
+          {creatorReviewers.map((n) => (
+            <FlowCard key={n.id} node={n} index={0} parallel />
+          ))}
+          {creator && (approvers.length > 0 || clusterReviewers.length > 0) && (
             <span className="hidden self-center text-muted-foreground sm:inline" aria-hidden>
               →
             </span>
@@ -58,7 +122,7 @@ export function ApprovalFlowChart({ nodes, mode = "sequential", onReorder, class
             {approvers.map((n, i) => (
               <FlowCard key={n.id} node={n} index={i + 1} parallel />
             ))}
-            {reviewers.map((n) => (
+            {clusterReviewers.map((n) => (
               <FlowCard key={n.id} node={n} index={0} parallel />
             ))}
           </div>
@@ -67,12 +131,22 @@ export function ApprovalFlowChart({ nodes, mode = "sequential", onReorder, class
     );
   }
 
-  const sequence = [creator, ...approvers, ...reviewers].filter(Boolean) as ApprovalFlowNode[];
+  // Sequential order: creator → (creator's reviewers) → approver 1 → (its reviewers) → …
+  const ordered: ApprovalFlowNode[] = [];
+  if (creator) {
+    ordered.push(creator, ...creatorReviewers);
+  }
+  for (const approver of approvers) {
+    ordered.push(approver, ...reviewersAddedBy(approver.id));
+  }
+  const placed = new Set(ordered.map((n) => n.id));
+  ordered.push(...reviewers.filter((r) => !placed.has(r.id)));
+  const sequence = ordered;
   const canReorder = Boolean(onReorder);
 
   return (
-    <div className={cn("space-y-3 rounded-lg border border-amber-200 bg-white p-4", className)} aria-label="Sequence chart">
-      <div className="flex items-center gap-2 text-xs font-medium text-amber-800">
+    <div className={cn("space-y-3 rounded-lg border border-amber-200 bg-white p-4 dark:border-amber-400/20 dark:bg-card", className)} aria-label="Sequence chart">
+      <div className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
         <UserRoundCheck className="h-3.5 w-3.5" />
         Sequential routing — approvers act in order, reviewers receive a copy
       </div>
@@ -174,8 +248,8 @@ function FlowCard({
         isCreator
           ? "border-stone-800 bg-stone-950 text-white"
           : isReviewer
-            ? "border-stone-300 bg-stone-100"
-            : "border-amber-300 bg-amber-50",
+            ? "border-stone-300 bg-stone-100 dark:border-stone-700 dark:bg-stone-800"
+            : "border-amber-300 bg-amber-50 dark:border-amber-400/25 dark:bg-amber-400/10",
         parallel && !isCreator && "flex-1 basis-[140px]",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
@@ -199,13 +273,13 @@ function FlowCard({
         <span
           className={cn(
             "text-[10px] font-medium uppercase tracking-wide",
-            isCreator ? "text-stone-300" : isReviewer ? "text-stone-500" : "text-amber-800",
+            isCreator ? "text-stone-300" : isReviewer ? "text-stone-500 dark:text-stone-400" : "text-amber-800 dark:text-amber-300",
           )}
         >
           {isCreator ? "Creator" : isReviewer ? "Reviewer" : parallel ? "Approver" : `Step ${index}`}
         </span>
       </div>
-      <p className={cn("truncate text-xs font-semibold", isCreator ? "text-white" : "text-stone-900")}>{node.label}</p>
+      <p className={cn("truncate text-xs font-semibold", isCreator ? "text-white" : "text-stone-900 dark:text-stone-100")}>{node.label}</p>
       {node.sub && <p className={cn("mt-0.5 truncate text-[11px]", isCreator ? "text-stone-300" : "text-muted-foreground")}>{node.sub}</p>}
     </div>
   );

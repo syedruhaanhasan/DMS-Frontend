@@ -9,7 +9,7 @@ import { Link } from "@tanstack/react-router";
 import { DocumentTable } from "@/components/wdas/document-table";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { useMemo, useState } from "react";
-import { FilePlus, FileText, Layers3 } from "lucide-react";
+import { Eye, FilePlus, FileText, Layers3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DocStatus } from "@/lib/wdas/types";
 
@@ -17,9 +17,9 @@ export const Route = createFileRoute("/documents/")({
   component: MyDocs,
 });
 
-type DocumentTab = "drafts" | "inApproval" | "approved" | "rejected" | "returned";
+type DocumentTab = "drafts" | "inApproval" | "approved" | "rejected" | "returned" | "forReview";
 
-const DOCUMENT_TABS: { id: DocumentTab; label: string; statuses: DocStatus[] }[] = [
+const STATUS_TABS: { id: Exclude<DocumentTab, "forReview">; label: string; statuses: DocStatus[] }[] = [
   { id: "drafts", label: "Drafts", statuses: ["draft"] },
   { id: "inApproval", label: "In Approval", statuses: ["pending", "ready_to_finalize"] },
   { id: "approved", label: "Approved", statuses: ["approved"] },
@@ -36,27 +36,40 @@ function MyDocs() {
     queryFn: () => wdas.listDocuments({ ownerId: user.id }),
     enabled: canFetch && !!user.id,
   });
+  // Documents shared with the current user for review (informational, no approval authority).
+  const reviewQ = useQuery({
+    queryKey: ["docs", "review", user.id],
+    queryFn: () => wdas.listReviewDocuments(),
+    enabled: canFetch && !!user.id,
+  });
 
-  const counts = useMemo(
-    () =>
-      Object.fromEntries(
-        DOCUMENT_TABS.map((tab) => [
-          tab.id,
-          (q.data ?? []).filter((doc) => tab.statuses.includes(doc.status)).length,
-        ]),
-      ) as Record<DocumentTab, number>,
-    [q.data],
-  );
+  const isReviewTab = activeTab === "forReview";
+
+  const counts = useMemo(() => {
+    const statusCounts = Object.fromEntries(
+      STATUS_TABS.map((tab) => [
+        tab.id,
+        (q.data ?? []).filter((doc) => tab.statuses.includes(doc.status)).length,
+      ]),
+    ) as Record<DocumentTab, number>;
+    statusCounts.forReview = (reviewQ.data ?? []).length;
+    return statusCounts;
+  }, [q.data, reviewQ.data]);
 
   const filtered = useMemo(() => {
-    const tab = DOCUMENT_TABS.find((item) => item.id === activeTab)!;
+    if (isReviewTab) return reviewQ.data ?? [];
+    const tab = STATUS_TABS.find((item) => item.id === activeTab)!;
     return (q.data ?? []).filter((doc) => tab.statuses.includes(doc.status));
-  }, [activeTab, q.data]);
+  }, [activeTab, isReviewTab, q.data, reviewQ.data]);
 
-  const activeLabel = DOCUMENT_TABS.find((tab) => tab.id === activeTab)!.label;
+  const activeLabel = isReviewTab
+    ? "For Review"
+    : STATUS_TABS.find((tab) => tab.id === activeTab)!.label;
+
+  const activeQuery = isReviewTab ? reviewQ : q;
 
   return (
-    <div className="min-h-full bg-slate-50/60">
+    <div className="min-h-full bg-background">
       <div className="relative overflow-hidden border-b border-slate-800 bg-slate-950 px-6 py-7 text-white sm:px-8">
         <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl" />
         <div className="relative mx-auto flex max-w-7xl flex-wrap items-end justify-between gap-5">
@@ -83,10 +96,10 @@ function MyDocs() {
 
       <div className="mx-auto max-w-7xl space-y-5 p-6 sm:p-8">
         <nav
-          className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm"
+          className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-sm"
           aria-label="Document status"
         >
-          {DOCUMENT_TABS.map((tab) => (
+          {STATUS_TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -94,8 +107,8 @@ function MyDocs() {
               className={cn(
                 "flex min-w-fit flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
                 activeTab === tab.id
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-amber-50 hover:text-slate-950",
+                  ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                  : "text-muted-foreground hover:bg-amber-50 hover:text-foreground dark:hover:bg-amber-400/10",
               )}
             >
               {tab.label}
@@ -104,30 +117,61 @@ function MyDocs() {
                   "min-w-6 rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold",
                   activeTab === tab.id
                     ? "bg-amber-400 text-slate-950"
-                    : "bg-slate-100 text-slate-500",
+                    : "bg-muted text-muted-foreground",
                 )}
               >
                 {counts[tab.id]}
               </span>
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setActiveTab("forReview")}
+            className={cn(
+              "flex min-w-fit flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+              isReviewTab
+                ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950"
+                : "text-muted-foreground hover:bg-amber-50 hover:text-foreground dark:hover:bg-amber-400/10",
+            )}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            For Review
+            <span
+              className={cn(
+                "min-w-6 rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold",
+                isReviewTab ? "bg-amber-400 text-slate-950" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {counts.forReview}
+            </span>
+          </button>
         </nav>
 
-        <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-4">
+        <Card className="overflow-hidden border-border bg-card shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
             <div>
-              <h2 className="font-semibold text-slate-950">{activeLabel}</h2>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <h2 className="font-semibold text-foreground">{activeLabel}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {counts[activeTab]} {counts[activeTab] === 1 ? "document" : "documents"}
               </p>
             </div>
             <span className="h-1.5 w-12 rounded-full bg-amber-400" />
           </div>
           <CardContent className="p-0">
-            {q.isFetching && !q.data ? (
+            {activeQuery.isFetching && !activeQuery.data ? (
               <LoadingState />
-            ) : q.isError ? (
-              <ErrorState message="Could not load documents." onRetry={() => q.refetch()} />
+            ) : activeQuery.isError ? (
+              <ErrorState message="Could not load documents." onRetry={() => activeQuery.refetch()} />
+            ) : isReviewTab ? (
+              filtered.length ? (
+                <DocumentTable docs={filtered} showStatus />
+              ) : (
+                <EmptyState
+                  icon={<Eye className="h-8 w-8" />}
+                  title="Nothing to review"
+                  description="Documents shared with you for review will appear here."
+                />
+              )
             ) : !q.data?.length ? (
               <EmptyState
                 icon={<FileText className="h-8 w-8" />}
@@ -148,7 +192,7 @@ function MyDocs() {
                 description="Documents in this stage will appear here."
               />
             ) : (
-              <DocumentTable docs={filtered} showStatus />
+              <DocumentTable docs={filtered} showStatus showReadStatus />
             )}
           </CardContent>
         </Card>

@@ -101,6 +101,7 @@ export const PERMISSION_GROUPS: { group: string; items: { key: string; label: st
 
 export const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: "/config/departments", permission: P.config.departments },
+  { prefix: "/config/user-types", permission: P.config.users },
   { prefix: "/config/users", permission: P.config.users },
   { prefix: "/config/roles", permission: P.config.roles },
   { prefix: "/config/active-directory", permission: P.config.ad },

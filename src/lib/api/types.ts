@@ -51,6 +51,8 @@ export interface ApiUserSummaryDto {
   roles: ApiAssignedRoleDto[] | Array<ApiApplicationRole | number>;
   permissions?: string[];
   isActive: boolean;
+  userTypeId?: string | null;
+  userTypeName?: string | null;
 }
 
 export interface ApiSecurityRoleSummaryDto {
@@ -93,6 +95,14 @@ export interface ApiDocumentTypeDto {
   description: string | null;
   category: "financial" | "non_financial" | string;
   amountRequired: boolean;
+  isActive: boolean;
+}
+
+export interface ApiUserTypeDto {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
   isActive: boolean;
 }
 
@@ -178,6 +188,8 @@ export interface ApiDocumentRecipientDto {
   id: string;
   recipientName: string;
   recipientEmail: string | null;
+  reviewerUserId?: string | null;
+  addedById?: string | null;
 }
 
 export interface ApiDocumentDto {
@@ -219,6 +231,7 @@ export interface ApiDashboardDocumentItemDto {
   slaClassification: string;
   activeStepId: string | null;
   isDelegated?: boolean;
+  activeStepSeenByApprover?: boolean;
 }
 
 export interface ApiPersonalDashboardDto {

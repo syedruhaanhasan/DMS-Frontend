@@ -25,6 +25,8 @@ interface Props {
   docs: Document[];
   showStatus?: boolean;
   showActions?: "approver" | "none";
+  /** Show whether the current approver has opened (read) the document. */
+  showReadStatus?: boolean;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
 }
@@ -33,6 +35,7 @@ export function DocumentTable({
   docs,
   showStatus,
   showActions = "none",
+  showReadStatus,
   onApprove,
   onReject,
 }: Props) {
@@ -62,6 +65,7 @@ export function DocumentTable({
               queuePosition={index + 1}
               showStatus={showStatus}
               showActions={showActions}
+              showReadStatus={showReadStatus}
               onApprove={onApprove}
               onReject={onReject}
             />
@@ -77,6 +81,7 @@ function DocumentTableRow({
   queuePosition,
   showStatus,
   showActions,
+  showReadStatus,
   onApprove,
   onReject,
 }: {
@@ -84,6 +89,7 @@ function DocumentTableRow({
   queuePosition: number;
   showStatus?: boolean;
   showActions?: "approver" | "none";
+  showReadStatus?: boolean;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
 }) {
@@ -151,7 +157,20 @@ function DocumentTableRow({
       </TableCell>
       {showStatus && (
         <TableCell>
-          <StatusBadge status={d.status} />
+          <div className="flex flex-col items-start gap-1">
+            <StatusBadge status={d.status} />
+            {showReadStatus && d.status === "pending" && (
+              <span
+                className={
+                  d.seenByApprover
+                    ? "inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                    : "inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
+                }
+              >
+                {d.seenByApprover ? "Read by approver" : "Unread"}
+              </span>
+            )}
+          </div>
         </TableCell>
       )}
       <TableCell className="text-right">
