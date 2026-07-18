@@ -33,14 +33,14 @@ function ExternalApproversPage() {
   const q = useQuery({ queryKey: ["externals"], queryFn: () => wdasConfig.listExternalApprovers() });
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="External Approvers"
         subtitle="Approvers outside the AD directory â€” email/OTP based access with expiring links."
         actions={can(P.config.externalApproversMake) ? <AddExternalDialog onAdded={() => qc.invalidateQueries({ queryKey: ["externals"] })} /> : undefined}
       />
-      <div className="p-6">
-        <Card>
+      <div className="p-6 lg:p-8">
+        <Card className="overflow-hidden border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <CardContent className="p-0">
             {q.isLoading ? <LoadingState />
               : q.isError ? <ErrorState message="Could not load external approvers." onRetry={() => q.refetch()} />
@@ -130,7 +130,7 @@ export function AddExternalDialog({ onAdded, trigger }: { onAdded?: () => void; 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
       <DialogTrigger asChild>
-        {trigger ?? <Button><Plus className="mr-1 h-4 w-4" /> Add external approver</Button>}
+        {trigger ?? <Button className="bg-amber-400 text-zinc-950 hover:bg-amber-300"><Plus className="mr-1 h-4 w-4" /> Add external approver</Button>}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

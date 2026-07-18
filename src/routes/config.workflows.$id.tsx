@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { relTime } from "@/lib/wdas/format";
 import type { Workflow } from "@/lib/wdas/types";
-import { CheckCircle2, History, FlaskConical, Save, Copy, Layers } from "lucide-react";
+import { CheckCircle2, History, FlaskConical, Save, Copy, Layers, Workflow as WorkflowIcon, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import type { NotificationSettings } from "@/lib/wdas/types";
@@ -146,7 +146,7 @@ function WorkflowDetail() {
   };
 
   return (
-    <div>
+    <div className="min-h-full bg-[#080a0d] text-zinc-100">
       <PageHeader
         title={w.name}
         subtitle={`${w.department} Â· ${w.documentType} Â· v${w.version ?? 1} Â· ${w.status?.toUpperCase()}`}
@@ -183,16 +183,25 @@ function WorkflowDetail() {
               </Button>
             )}
             {can(P.config.workflowsCheck) && w.status !== "pending" && (
-              <Button disabled={publishing} onClick={() => setConfirmPublish(true)}>
+              <Button className="bg-amber-400 text-zinc-950 hover:bg-amber-300" disabled={publishing} onClick={() => setConfirmPublish(true)}>
                 <Save className="mr-1 h-4 w-4" /> {publishing ? "Publishing…" : "Publish new version"}
               </Button>
             )}
           </>
         }
       />
-      <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="relative overflow-hidden p-6 lg:p-8">
+        <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(245,158,11,.13)_1px,transparent_1px),linear-gradient(90deg,rgba(245,158,11,.13)_1px,transparent_1px)] [background-size:32px_32px]" />
+        <div className="relative mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/25 bg-zinc-950/90 p-4 shadow-2xl">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-400 text-zinc-950"><WorkflowIcon className="h-5 w-5" /></span>
+            <div><p className="text-xs font-semibold uppercase tracking-[.2em] text-amber-400">Live workflow canvas</p><p className="mt-0.5 text-sm text-zinc-400">{w.name} · version {w.version ?? 1}</p></div>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400"><GitBranch className="h-3.5 w-3.5 text-amber-400" /> {d.approvalSequence === "parallel" ? "Parallel routing" : "Sequential routing"}</div>
+        </div>
+      <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
-          <Card>
+          <Card className="border-zinc-700 bg-zinc-950/95 text-zinc-100 shadow-xl">
             <CardHeader className="pb-3"><CardTitle className="text-base">Basic info</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
@@ -242,7 +251,7 @@ function WorkflowDetail() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-zinc-700 bg-zinc-950/95 text-zinc-100 shadow-xl">
             <CardHeader className="pb-3"><CardTitle className="text-base">Policy & SLA</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -267,7 +276,7 @@ function WorkflowDetail() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-zinc-700 bg-zinc-950/95 text-zinc-100 shadow-xl">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base"><Layers className="h-4 w-4" /> Matrix templates</CardTitle>
             </CardHeader>
@@ -297,7 +306,7 @@ function WorkflowDetail() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-zinc-700 bg-zinc-950/95 text-zinc-100 shadow-xl">
             <CardHeader className="pb-3"><CardTitle className="text-base">Notification channels (workflow default)</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {(["submit", "approve", "reject", "reminder"] as const).map((event) => (
@@ -325,9 +334,11 @@ function WorkflowDetail() {
             </CardContent>
           </Card>
 
-          <ApprovalModeBuilder value={d} onChange={(patch) => setDraft((prev) => ({ ...(prev ?? w), ...patch }))} />
+          <div className="[&_.bg-card]:bg-zinc-950 [&_.border-border]:border-zinc-700 [&_.text-card-foreground]:text-zinc-100">
+            <ApprovalModeBuilder value={d} onChange={(patch) => setDraft((prev) => ({ ...(prev ?? w), ...patch }))} />
+          </div>
 
-          <Card>
+          <Card className="border-zinc-700 bg-zinc-950/95 text-zinc-100 shadow-xl">
             <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><FlaskConical className="h-4 w-4 text-info" /> Preview / Test Mode</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-3">
@@ -335,13 +346,13 @@ function WorkflowDetail() {
                 <Input type="number" value={testAmount} onChange={(e) => setTestAmount(Number(e.target.value) || 0)} className="h-8 w-40" />
                 <p className="text-xs text-muted-foreground">No document is created â€” this only shows the resolved approval chain.</p>
               </div>
-              <ChainPreview nodes={testPreview} />
+              <ChainPreview nodes={testPreview} className="border-amber-400/30 bg-amber-400/5 [&>div>div]:border-amber-400/40 [&>div>div]:bg-zinc-900" />
             </CardContent>
           </Card>
         </div>
 
         <div className="space-y-4">
-          <Card>
+          <Card className="border-zinc-700 bg-zinc-950/95 text-zinc-100 shadow-xl">
             <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><History className="h-4 w-4" /> Version history</CardTitle></CardHeader>
             <CardContent className="space-y-2 p-0">
               {(versionsQ.data ?? []).slice().reverse().map((v) => (
@@ -361,6 +372,7 @@ function WorkflowDetail() {
             </CardContent>
           </Card>
         </div>
+      </div>
       </div>
 
       <ConfirmDialog

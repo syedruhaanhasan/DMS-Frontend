@@ -26,6 +26,11 @@ export function CreateUserForm({
   submitLabel = "Create user",
 }: CreateUserFormProps) {
   const qc = useQueryClient();
+  const adStatusQ = useQuery({
+    queryKey: ["ad-status"],
+    queryFn: () => wdasConfig.getActiveDirectoryStatus(),
+  });
+  const adEnabled = adStatusQ.data?.enabled ?? false;
   const [accountType, setAccountType] = useState<AccountType>("local");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +42,11 @@ export function CreateUserForm({
   const [saving, setSaving] = useState(false);
 
   const isAdAccount = accountType === "ad";
+
+  // If AD gets disabled while an AD account type is selected, fall back to local.
+  useEffect(() => {
+    if (!adEnabled && accountType === "ad") setAccountType("local");
+  }, [adEnabled, accountType]);
 
   const departments = useQuery({
     queryKey: ["departments"],
@@ -139,7 +149,7 @@ export function CreateUserForm({
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="local">Local (username & password)</SelectItem>
-              <SelectItem value="ad">Active Directory</SelectItem>
+              {adEnabled && <SelectItem value="ad">Active Directory</SelectItem>}
             </SelectContent>
           </Select>
         </div>

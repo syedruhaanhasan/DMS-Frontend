@@ -16,10 +16,9 @@ import { toast } from "sonner";
 import { api } from "@/lib/api/client";
 import type { ApiVolumeTrendReportDto, ApiBottleneckReportDto, ApiSuccessMetricsDto } from "@/lib/api/types";
 import { Link } from "@tanstack/react-router";
-import { isAdminRole } from "@/lib/wdas/role-context";
-import { Building2, FileType, GitBranch, Mail, Network, Shield, UserPlus, Workflow as WorkflowIcon } from "lucide-react";
 import { useCanFetchDocuments } from "@/lib/wdas/use-document-query";
 import { refreshWorkflowViews } from "@/lib/wdas/refresh-workflow-queries";
+import { AdminConfigAnalytics } from "@/components/wdas/admin-config-analytics";
 import {
   Area,
   AreaChart,
@@ -42,45 +41,14 @@ export const Route = createFileRoute("/dashboard")({
 function SuperAdminDashboard() {
   const { user } = useSession();
 
-  const configLinks = [
-    { to: "/config/users", label: "Users", description: "Create and manage user accounts", icon: UserPlus },
-    { to: "/config/roles", label: "Roles", description: "View role definitions and create custom roles", icon: Shield },
-    { to: "/config/departments", label: "Departments", description: "Organize teams and routing boundaries", icon: Building2 },
-    { to: "/config/workflows", label: "Workflows", description: "Configure approval paths and rules", icon: WorkflowIcon },
-    { to: "/config/document-types", label: "Document types", description: "Define reusable document categories", icon: FileType },
-    { to: "/config/approval-modes", label: "Approval modes", description: "Reference for matrix, user, and hybrid routing", icon: GitBranch },
-    { to: "/config/external-approvers", label: "External approvers", description: "Manage guest approval sessions", icon: Mail },
-    { to: "/config/active-directory", label: "Active Directory", description: "Directory connection settings", icon: Network },
-    { to: "/settings/delegation", label: "Delegation", description: "Approver delegation policies", icon: UserPlus },
-  ] as const;
-
   return (
     <div>
       <PageHeader
         title={`Welcome, ${user.name.split(" ")[0]}`}
-        subtitle="Super Admin workspace — manage system configuration from here."
+        subtitle="Super Admin workspace — live system analytics."
       />
       <div className="page-shell">
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {configLinks.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.to} to={item.to}>
-                <Card className="h-full border-border/70 transition-colors hover:border-primary/30 hover:bg-muted/30">
-                  <CardHeader className="flex flex-row items-start gap-3 space-y-0 pb-2">
-                    <div className="rounded-lg border border-primary/15 bg-primary/10 p-2 text-primary">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{item.label}</CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-                    </div>
-                  </CardHeader>
-                </Card>
-              </Link>
-            );
-          })}
-        </section>
+        <AdminConfigAnalytics />
       </div>
     </div>
   );
@@ -137,7 +105,7 @@ function StandardDashboard() {
   const workloadByTeam = (bottlenecksQ.data ?? []).slice(0, 4).map((b, i) => ({
     name: b.approverDisplayName.split(" ")[0] || `A${i + 1}`,
     value: b.stepCount,
-    color: ["#2563eb", "#8b5cf6", "#14b8a6", "#f59e0b"][i % 4],
+    color: ["#d97706", "#f59e0b", "#78716c", "#292524"][i % 4],
   }));
 
   const onTime = pending.data?.filter((d) => d.sla === "on_time").length ?? 0;
@@ -145,9 +113,9 @@ function StandardDashboard() {
   const overdue = pending.data?.filter((d) => d.sla === "overdue").length ?? 0;
   const slaTotal = onTime + atRisk + overdue || 1;
   const cycleHealth = [
-    { name: "On time", value: Math.round((onTime / slaTotal) * 100), color: "#2563eb" },
-    { name: "At risk", value: Math.round((atRisk / slaTotal) * 100), color: "#8b5cf6" },
-    { name: "Delayed", value: Math.round((overdue / slaTotal) * 100), color: "#f97316" },
+    { name: "On time", value: Math.round((onTime / slaTotal) * 100), color: "#f59e0b" },
+    { name: "At risk", value: Math.round((atRisk / slaTotal) * 100), color: "#a8a29e" },
+    { name: "Delayed", value: Math.round((overdue / slaTotal) * 100), color: "#292524" },
   ];
 
   const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject"; stepId?: string } | null>(null);
@@ -176,14 +144,14 @@ function StandardDashboard() {
 
   const executiveSignals = showAdminMetrics && metricsQ.data
     ? [
-        { label: "SLA compliance", value: `${metricsQ.data.slaCompliancePercent}%`, tone: "text-emerald-300" },
-        { label: "Avg cycle time", value: `${metricsQ.data.averageCycleTimeDays}d`, tone: "text-cyan-300" },
-        { label: "Adoption rate", value: `${metricsQ.data.adoptionRatePercent}%`, tone: "text-violet-300" },
+        { label: "SLA compliance", value: `${metricsQ.data.slaCompliancePercent}%`, tone: "text-amber-300" },
+        { label: "Avg cycle time", value: `${metricsQ.data.averageCycleTimeDays}d`, tone: "text-amber-100" },
+        { label: "Adoption rate", value: `${metricsQ.data.adoptionRatePercent}%`, tone: "text-stone-200" },
       ]
     : [
-        { label: "Focus queue", value: `${pending.data?.length ?? 0} items`, tone: "text-sky-300" },
-        { label: "Actionable drafts", value: `${(mine.data ?? []).filter((d) => d.status === "draft").length} items`, tone: "text-cyan-300" },
-        { label: "Closed workflows", value: `${(completed.data ?? []).filter((d) => d.status === "approved").length} items`, tone: "text-emerald-300" },
+        { label: "Focus queue", value: `${pending.data?.length ?? 0} items`, tone: "text-amber-300" },
+        { label: "Actionable drafts", value: `${(mine.data ?? []).filter((d) => d.status === "draft").length} items`, tone: "text-amber-100" },
+        { label: "Closed workflows", value: `${(completed.data ?? []).filter((d) => d.status === "approved").length} items`, tone: "text-stone-200" },
       ];
 
   const summaryCards = [
@@ -192,30 +160,40 @@ function StandardDashboard() {
       value: pending.data?.length ?? 0,
       subtitle: "Awaiting your action",
       icon: Inbox,
-      accent: "text-sky-600",
-      iconClass: "border-sky-500/25 bg-sky-500/12",
-      bar: "bg-gradient-to-r from-sky-500 to-cyan-400",
-      glow: "linear-gradient(135deg, rgba(14,165,233,0.18), rgba(59,130,246,0.06))",
+      accent: "text-amber-700",
+      iconClass: "border-amber-500/30 bg-amber-500/10",
+      bar: "bg-amber-500",
+      glow: "linear-gradient(135deg, rgba(245,158,11,0.16), rgba(28,25,23,0.04))",
     },
     {
       title: "Drafts in progress",
       value: (mine.data ?? []).filter((d) => d.status === "draft").length,
       subtitle: "Owned by you",
       icon: FileText,
-      accent: "text-violet-600",
-      iconClass: "border-violet-500/25 bg-violet-500/12",
-      bar: "bg-gradient-to-r from-violet-500 to-fuchsia-400",
-      glow: "linear-gradient(135deg, rgba(139,92,246,0.17), rgba(99,102,241,0.07))",
+      accent: "text-amber-700",
+      iconClass: "border-amber-500/30 bg-amber-500/10",
+      bar: "bg-amber-600",
+      glow: "linear-gradient(135deg, rgba(217,119,6,0.16), rgba(28,25,23,0.04))",
     },
     {
       title: "Completed this month",
       value: (completed.data ?? []).filter((d) => d.status === "approved").length,
       subtitle: "Approved and closed",
       icon: CheckCircle2,
-      accent: "text-emerald-600",
-      iconClass: "border-emerald-500/25 bg-emerald-500/12",
-      bar: "bg-gradient-to-r from-emerald-500 to-lime-400",
-      glow: "linear-gradient(135deg, rgba(16,185,129,0.17), rgba(34,197,94,0.07))",
+      accent: "text-amber-700",
+      iconClass: "border-amber-500/30 bg-amber-500/10",
+      bar: "bg-amber-400",
+      glow: "linear-gradient(135deg, rgba(251,191,36,0.16), rgba(28,25,23,0.04))",
+    },
+    {
+      title: "Active workflows",
+      value: (mine.data ?? []).filter((d) => d.status === "pending" || d.status === "ready_to_finalize").length,
+      subtitle: "Currently in review",
+      icon: ShieldCheck,
+      accent: "text-stone-700",
+      iconClass: "border-stone-500/25 bg-stone-500/10",
+      bar: "bg-stone-700",
+      glow: "linear-gradient(135deg, rgba(120,113,108,0.16), rgba(28,25,23,0.04))",
     },
   ];
 
@@ -227,13 +205,13 @@ function StandardDashboard() {
       />
       <DelegationBanner />
       <div className="page-shell">
-        <section className="relative overflow-hidden rounded-[30px] border border-border/60 bg-slate-950 p-4 text-white shadow-[0_25px_70px_-35px_rgba(15,23,42,0.8)] backdrop-blur sm:p-5">
-          <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-cyan-400/30 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-44 w-44 rounded-full bg-violet-400/20 blur-3xl" />
+        <section className="relative overflow-hidden rounded-[30px] border border-stone-800 bg-stone-950 p-4 text-white shadow-[0_25px_70px_-35px_rgba(28,25,23,0.8)] sm:p-5">
+          <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-amber-400/20 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-44 w-44 rounded-full bg-amber-700/10 blur-3xl" />
           <div className="relative z-10">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="max-w-2xl">
-                <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">
+                <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
                   <Sparkles className="h-3.5 w-3.5" />
                   Executive command center
                 </span>
@@ -256,7 +234,7 @@ function StandardDashboard() {
               ))}
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {summaryCards.map((card) => {
                 const Icon = card.icon;
                 const fillWidth = Math.min(100, Math.max(18, card.value * 12));
@@ -281,7 +259,7 @@ function StandardDashboard() {
                       <div className={cn("h-1 transition-all duration-500", card.bar)} style={{ width: `${fillWidth}%` }} />
                     </div>
                     <div className="relative z-10 flex items-center gap-2 px-5 py-3 text-sm text-slate-200">
-                      <TrendingUp className="h-4 w-4 text-emerald-300" />
+                      <TrendingUp className="h-4 w-4 text-amber-300" />
                       <span>Steady throughput across this week</span>
                     </div>
                   </Card>
@@ -324,10 +302,10 @@ function StandardDashboard() {
             </div>
           )}
           <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="dashboard-animated-card mt-4 border-primary/15 bg-gradient-to-br from-primary/10 via-card to-background/95 shadow-[0_20px_60px_-28px_rgba(37,99,235,0.35)]">
+          <Card className="dashboard-animated-card mt-4 border-amber-300/60 bg-amber-50/70 shadow-[0_20px_60px_-28px_rgba(217,119,6,0.25)]">
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
             <div className="flex items-start gap-3">
-              <div className="rounded-xl border border-primary/20 bg-primary/10 p-2.5 text-primary">
+              <div className="rounded-xl border border-amber-300 bg-amber-100 p-2.5 text-amber-800">
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div>
@@ -343,16 +321,16 @@ function StandardDashboard() {
         </Card>
 
         <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-          <Card className="dashboard-chart-panel dashboard-animated-card overflow-hidden border-border/70 bg-gradient-to-br from-white via-slate-50 to-blue-50/70">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.16),_transparent_35%)]" />
+          <Card className="dashboard-chart-panel dashboard-animated-card overflow-hidden border-amber-200/70 bg-amber-50/45">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.14),_transparent_35%)]" />
             <CardHeader className="relative z-10 flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <TrendingUp className="h-4 w-4 text-primary" /> Approval momentum
+                  <TrendingUp className="h-4 w-4 text-amber-700" /> Approval momentum
                 </CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">A premium view of approvals, drafts, and response velocity.</p>
               </div>
-              <div className="flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+              <div className="flex items-center gap-2 rounded-full border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800">
                 <Sparkles className="h-3.5 w-3.5" /> Live pulse
               </div>
             </CardHeader>
@@ -361,34 +339,34 @@ function StandardDashboard() {
                 <AreaChart data={approvalTrend.length ? approvalTrend : [{ name: "—", approvals: 0, drafts: 0 }]}>
                   <defs>
                     <linearGradient id="approvalFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.38} />
-                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0.04} />
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.38} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.04} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(148,163,184,0.16)" vertical={false} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
                   <Tooltip
-                    cursor={{ stroke: "rgba(37,99,235,0.2)", strokeWidth: 2 }}
+                    cursor={{ stroke: "rgba(217,119,6,0.25)", strokeWidth: 2 }}
                     contentStyle={{ borderRadius: 14, borderColor: "rgba(148,163,184,0.25)", boxShadow: "0 20px 45px -24px rgba(15,23,42,0.3)" }}
                   />
-                  <Area type="monotone" dataKey="approvals" stroke="#2563eb" strokeWidth={3} fill="url(#approvalFill)" />
-                  <Area type="monotone" dataKey="drafts" stroke="#8b5cf6" strokeWidth={3} fill="transparent" />
+                  <Area type="monotone" dataKey="approvals" stroke="#d97706" strokeWidth={3} fill="url(#approvalFill)" />
+                  <Area type="monotone" dataKey="drafts" stroke="#292524" strokeWidth={3} fill="transparent" />
                 </AreaChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           <div className="grid gap-4">
-            <Card className="dashboard-animated-card border-border/70 bg-gradient-to-br from-white via-slate-50/80 to-violet-50/70">
+            <Card className="dashboard-animated-card border-amber-200/70 bg-amber-50/35">
               <CardHeader className="space-y-0">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <ShieldCheck className="h-4 w-4 text-violet-500" /> Throughput by team
+                  <ShieldCheck className="h-4 w-4 text-amber-700" /> Departments
                 </CardTitle>
               </CardHeader>
               <CardContent className="h-[140px] p-0 px-5 pb-5">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={workloadByTeam.length ? workloadByTeam : [{ name: "—", value: 0, color: "#2563eb" }]}>
+                  <BarChart data={workloadByTeam.length ? workloadByTeam : [{ name: "—", value: 0, color: "#d97706" }]}>
                     <CartesianGrid vertical={false} stroke="rgba(148,163,184,0.16)" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
@@ -403,7 +381,7 @@ function StandardDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="dashboard-animated-card border-border/70 bg-gradient-to-br from-white via-slate-50/80 to-amber-50/70">
+            <Card className="dashboard-animated-card border-amber-200/70 bg-amber-50/35">
               <CardHeader className="space-y-0">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <CheckCircle2 className="h-4 w-4 text-amber-500" /> Cycle health
@@ -525,6 +503,7 @@ function StandardDashboard() {
             </CardContent>
           </Card>
         </section>
+        {showAdminMetrics && <AdminConfigAnalytics />}
       </div>
 
       <ConfirmDialog

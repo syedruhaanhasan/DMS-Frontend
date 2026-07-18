@@ -45,19 +45,22 @@ function StepNode({
       : returned
         ? "border-warning bg-warning text-warning-foreground"
         : isCurrent
-          ? "border-info bg-info text-info-foreground ring-4 ring-info/20"
-          : "border-border bg-muted text-muted-foreground";
+          ? "border-primary bg-primary text-primary-foreground ring-4 ring-primary/15 shadow-sm"
+          : "border-border bg-card text-muted-foreground";
 
   const Icon = done ? Check : rejected ? X : returned ? RotateCcw : Clock;
 
   return (
-    <li className={cn("flex min-w-0 flex-1 items-start", !isLast && "flex-[1.2]")} aria-current={isCurrent ? "step" : undefined}>
+    <li
+      className={cn("flex min-w-[8rem] flex-1 items-start", !isLast && "flex-[1.2]")}
+      aria-current={isCurrent ? "step" : undefined}
+    >
       <div className="flex min-w-0 flex-1 flex-col items-center">
         <div className="flex w-full items-center">
           <div
             className={cn(
               "flex shrink-0 items-center justify-center rounded-full border-2",
-              compact ? "h-7 w-7" : "h-8 w-8",
+              compact ? "h-7 w-7" : "h-9 w-9",
               dotCls,
             )}
             aria-hidden
@@ -68,16 +71,21 @@ function StepNode({
             <div
               className={cn(
                 "mx-1 h-0.5 min-w-[1rem] flex-1 rounded-full",
-                done ? "bg-success/60" : "bg-border",
+                done
+                  ? "bg-success/50"
+                  : isCurrent
+                    ? "bg-gradient-to-r from-primary/50 to-border"
+                    : "bg-border",
               )}
               aria-hidden
             />
           )}
         </div>
-        <div className={cn("mt-2 w-full text-center", compact ? "max-w-[7rem]" : "max-w-[9rem]")}>
+        <div className={cn("mt-2.5 w-full text-left", compact ? "max-w-[7rem]" : "max-w-[9rem]")}>
           <p
             className={cn(
               "truncate text-xs font-semibold",
+              isCurrent && "text-primary",
               upcoming ? "text-muted-foreground" : "text-foreground",
             )}
           >
@@ -90,14 +98,21 @@ function StepNode({
             <Tooltip>
               <TooltipTrigger asChild>
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  {new Date(step.actedAt).toLocaleDateString("en-PK", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {new Date(step.actedAt).toLocaleDateString("en-PK", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </p>
               </TooltipTrigger>
               <TooltipContent>{absTime(step.actedAt)}</TooltipContent>
             </Tooltip>
           )}
           {isCurrent && !step.actedAt && (
-            <p className="mt-1 text-[10px] font-medium text-info">Awaiting action</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
+              Current approval
+            </p>
           )}
           {step.comment && (
             <Tooltip>
@@ -121,15 +136,27 @@ export function WorkflowStepper({ steps, currentStepId, resolveUser, className, 
   const sorted = [...steps].sort((a, b) => a.order - b.order);
 
   return (
-    <WorkflowStepperInner steps={sorted} currentStepId={currentStepId} resolveUser={resolveUser} className={className} compact={compact} />
+    <WorkflowStepperInner
+      steps={sorted}
+      currentStepId={currentStepId}
+      resolveUser={resolveUser}
+      className={className}
+      compact={compact}
+    />
   );
 }
 
-function WorkflowStepperInner({ steps, currentStepId, resolveUser, className, compact }: Props & { steps: ApprovalStep[] }) {
+function WorkflowStepperInner({
+  steps,
+  currentStepId,
+  resolveUser,
+  className,
+  compact,
+}: Props & { steps: ApprovalStep[] }) {
   return (
     <TooltipProvider>
       <nav aria-label="Approval workflow progress" className={cn("w-full", className)}>
-        <ol className="flex w-full items-start gap-0 overflow-x-auto pb-2">
+        <ol className="flex w-full items-start gap-0 overflow-x-auto px-1 pb-2">
           {steps.map((step, i) => (
             <StepNodeWithUser
               key={step.id}
@@ -160,7 +187,13 @@ function StepNodeWithUser({
   compact?: boolean;
 }) {
   const ctxUser = useUserById(step.approverId);
-  const user = resolveUser?.(step.approverId) ?? (ctxUser ? { id: ctxUser.id, name: ctxUser.name, designation: ctxUser.designation } : undefined);
+  const user =
+    resolveUser?.(step.approverId) ??
+    (ctxUser
+      ? { id: ctxUser.id, name: ctxUser.name, designation: ctxUser.designation }
+      : undefined);
 
-  return <StepNode step={step} user={user} isCurrent={isCurrent} isLast={isLast} compact={compact} />;
+  return (
+    <StepNode step={step} user={user} isCurrent={isCurrent} isLast={isLast} compact={compact} />
+  );
 }

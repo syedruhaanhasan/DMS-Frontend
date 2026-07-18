@@ -60,13 +60,13 @@ function RolesConfigPage() {
   const existingNames = (rolesQ.data ?? []).map((r) => r.name);
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="Roles"
         subtitle="Create roles and assign Maker and Checker rights on each configuration screen."
         actions={
           can(P.config.rolesMake) ? (
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button className="bg-amber-400 text-zinc-950 hover:bg-amber-300" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create role
             </Button>
@@ -74,8 +74,8 @@ function RolesConfigPage() {
         }
       />
 
-      <div className="p-6">
-        <Card>
+      <div className="p-6 lg:p-8">
+        <Card className="overflow-hidden border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <CardContent className="p-0">
             {rolesQ.isLoading ? (
               <LoadingState />

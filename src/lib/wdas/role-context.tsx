@@ -4,6 +4,8 @@ import type { ApiLoginResponse, ApiUserSummaryDto } from "@/lib/api/types";
 import { mapUser, pickPrimaryRole, mapApiRole } from "@/lib/api/mappers";
 import type { Role, User, Department } from "./types";
 import { ROUTE_PERMISSIONS, expandImpliedPermissions } from "./permissions";
+import { isAdAccount } from "./ad-settings";
+import { wdasConfig } from "@/services/wdas-config";
 
 interface Session {
   role: Role;
@@ -121,8 +123,26 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     setViewDept: (d) => setSession((s) => ({ ...s, viewDept: d })),
     signIn: async (username, password) => {
       const res = await api.post<ApiLoginResponse>("/api/auth/login", { username, password });
-      setToken(res.accessToken);
       const profile = mapUser(res.user);
+
+      setToken(res.accessToken);
+
+      // Active Directory accounts cannot sign in while AD integration is disabled.
+      // The enabled flag is sourced from the database via the API.
+      if (isAdAccount(profile.adId)) {
+        let adEnabled = true;
+        try {
+          adEnabled = (await wdasConfig.getActiveDirectoryStatus()).enabled;
+        } catch {
+          // If the status can't be determined, don't lock the user out.
+          adEnabled = true;
+        }
+        if (!adEnabled) {
+          setToken(null);
+          throw new Error("Active Directory sign-in is currently disabled. Please contact your administrator.");
+        }
+      }
+
       const availableRoles = rolesFromApi(res.user);
       const role = pickPrimaryRole(res.user.roles as never);
       setSession({
@@ -136,6 +156,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       });
     },
     signOut: () => {
+      // Revoke the token server-side (best-effort) while it is still present, so it
+      // cannot be reused after sign-out. Fire-and-forget: local sign-out proceeds regardless.
+      void api.post("/api/auth/logout").catch(() => {
+        /* token may already be expired/invalid — clearing it locally is enough */
+      });
       setToken(null);
       try {
         localStorage.removeItem("wdas.session");

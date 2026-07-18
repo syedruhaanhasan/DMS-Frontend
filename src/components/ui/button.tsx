@@ -9,14 +9,14 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:shadow-md",
-        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md",
-        outline: "border border-border/80 bg-card text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+        default: "bg-primary text-primary-foreground shadow-none hover:bg-primary-hover",
+        destructive: "bg-destructive text-destructive-foreground shadow-none hover:bg-destructive/90",
+        outline: "border border-border bg-card text-foreground shadow-none hover:border-foreground/20 hover:bg-muted",
+        secondary: "bg-secondary text-secondary-foreground shadow-none hover:bg-secondary/80",
         ghost: "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
-        success: "bg-success text-success-foreground shadow-sm hover:bg-success/90 hover:shadow-md",
-        warning: "bg-warning text-warning-foreground shadow-sm hover:bg-warning/90 hover:shadow-md",
-        link: "text-brand underline-offset-4 hover:underline",
+        success: "bg-success text-success-foreground shadow-none hover:bg-success/90",
+        warning: "bg-warning text-warning-foreground shadow-none hover:bg-warning/90",
+        link: "text-foreground decoration-primary decoration-2 underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2",

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/wdas/page-header";
 import { CreateUserForm } from "@/components/wdas/create-user-form";
-import { EditUserRolesSheet } from "@/components/wdas/edit-user-roles-sheet";
+import { EditUserSheet } from "@/components/wdas/edit-user-sheet";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
 import { useSession } from "@/lib/wdas/role-context";
@@ -13,9 +13,11 @@ import type { User } from "@/lib/wdas/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { UserPlus, Users, Pencil, Trash2 } from "lucide-react";
+import { UserPlus, Users, Pencil, Trash2, Search, ShieldCheck, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { ActiveStatusBadge, ActiveStatusFilter, ActiveStatusSwitch, matchesActiveFilter, type ActiveFilter } from "@/components/wdas/active-status";
 
@@ -31,6 +33,7 @@ function UserManagementPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
   const [statusFilter, setStatusFilter] = useState<ActiveFilter>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!can(P.config.users)) router.navigate({ to: "/dashboard" });
@@ -44,7 +47,12 @@ function UserManagementPage() {
 
   if (!can(P.config.users)) return null;
 
-  const filteredUsers = (users.data ?? []).filter((u) => matchesActiveFilter(u.isActive !== false, statusFilter));
+  const allUsers = users.data ?? [];
+  const searchTerm = search.trim().toLowerCase();
+  const filteredUsers = allUsers.filter((u) =>
+    matchesActiveFilter(u.isActive !== false, statusFilter) &&
+    (!searchTerm || [u.name, u.username, u.adId, u.email, u.department].some((value) => value?.toLowerCase().includes(searchTerm))),
+  );
 
   const toggleUserStatus = async (u: User, isActive: boolean) => {
     try {
@@ -59,7 +67,7 @@ function UserManagementPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="User Management"
         subtitle="Create accounts (Maker) and assign roles or activate users (Checker)."
@@ -67,34 +75,43 @@ function UserManagementPage() {
           can(P.config.usersMake) ? (
           <Button
             onClick={() => setCreateOpen(true)}
-            className="group relative h-auto gap-3 overflow-hidden rounded-2xl border-0 bg-gradient-to-r from-primary via-indigo-500 to-cyan-500 px-4 py-2.5 text-white shadow-[0_12px_32px_-16px_rgba(37,99,235,0.75)] transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_16px_40px_-14px_rgba(37,99,235,0.85)] active:scale-[0.98]"
+            className="group h-auto gap-3 rounded-xl border border-amber-300 bg-amber-400 px-4 py-2.5 text-zinc-950 shadow-[0_10px_28px_-14px_rgba(245,158,11,.9)] hover:bg-amber-300"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/25 transition-colors group-hover:bg-white/30">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-amber-400">
               <UserPlus className="h-4 w-4" />
             </span>
-            <span className="relative flex flex-col items-start text-left leading-tight">
+            <span className="flex flex-col items-start text-left leading-tight">
               <span className="text-sm font-semibold tracking-tight">Create new user</span>
-              <span className="text-[11px] font-medium text-white/75">Add account & assign roles</span>
+              <span className="text-[11px] font-medium text-zinc-700">Add account & assign roles</span>
             </span>
           </Button>
           ) : null
         }
       />
 
-      <div className="space-y-6 p-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+      <div className="space-y-6 p-6 lg:p-8">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat icon={Users} label="Total accounts" value={allUsers.length} />
+          <Stat icon={UserCheck} label="Active users" value={allUsers.filter((user) => user.isActive !== false).length} />
+          <Stat icon={ShieldCheck} label="Assigned roles" value={new Set(allUsers.flatMap((user) => user.appRoles?.length ? user.appRoles : [user.appRole ?? "Maker"])).size} />
+        </div>
+
+        <Card className="overflow-hidden border-zinc-200 shadow-sm dark:border-zinc-800">
+          <CardHeader className="border-b bg-white dark:bg-zinc-950">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Users className="h-5 w-5" />
-                All users
-              </CardTitle>
-              <CardDescription>Users currently registered in WDAS.</CardDescription>
+              <p className="text-xs font-semibold uppercase tracking-[.2em] text-amber-600">Identity directory</p>
+              <CardTitle className="mt-1 text-xl">People & access</CardTitle>
+              <CardDescription className="mt-1">Manage account status, roles, and organizational placement.</CardDescription>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users…" className="bg-background pl-9" />
+              </div>
               <ActiveStatusFilter value={statusFilter} onChange={setStatusFilter} />
-              <Badge variant="secondary">{filteredUsers.length} users</Badge>
+              <Badge variant="outline" className="border-amber-400/50 bg-amber-400/10 text-amber-700">{filteredUsers.length} shown</Badge>
+            </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -104,7 +121,7 @@ function UserManagementPage() {
               : (
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="bg-zinc-50/80 hover:bg-zinc-50/80 dark:bg-zinc-900/70 dark:hover:bg-zinc-900/70">
                       <TableHead>Name</TableHead>
                       <TableHead>Username</TableHead>
                       <TableHead>Email</TableHead>
@@ -117,8 +134,17 @@ function UserManagementPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredUsers.map((u) => (
-                      <TableRow key={u.id}>
-                        <TableCell className="font-medium">{u.name}</TableCell>
+                      <TableRow key={u.id} className="group hover:bg-amber-50/50 dark:hover:bg-amber-400/5">
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9 border border-amber-400/30">
+                              <AvatarFallback className="bg-zinc-950 text-xs font-semibold text-amber-400">
+                                {u.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div><p className="font-medium">{u.name}</p><p className="text-xs text-muted-foreground">{u.designation ?? "Team member"}</p></div>
+                          </div>
+                        </TableCell>
                         <TableCell className="font-mono text-xs">{u.username ?? u.adId}</TableCell>
                         <TableCell className="text-sm">{u.email}</TableCell>
                         <TableCell>{u.department}</TableCell>
@@ -145,7 +171,7 @@ function UserManagementPage() {
                         <TableCell>
                           <div className="flex gap-1">
                             {can(P.config.usersCheck) && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditUser(u)} title="Edit roles">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditUser(u)} title="Edit user">
                                 <Pencil className="h-4 w-4" />
                               </Button>
                             )}
@@ -189,7 +215,7 @@ function UserManagementPage() {
         </DialogContent>
       </Dialog>
 
-      <EditUserRolesSheet
+      <EditUserSheet
         user={editUser}
         open={!!editUser}
         onOpenChange={(open) => { if (!open) setEditUser(null); }}
@@ -218,5 +244,16 @@ function UserManagementPage() {
         }}
       />
     </div>
+  );
+}
+
+function Stat({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: number }) {
+  return (
+    <Card className="border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <CardContent className="flex items-center justify-between p-5">
+        <div><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div>
+        <span className="rounded-lg bg-amber-400/15 p-2.5 text-amber-600"><Icon className="h-5 w-5" /></span>
+      </CardContent>
+    </Card>
   );
 }

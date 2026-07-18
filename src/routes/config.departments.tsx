@@ -87,18 +87,18 @@ function DepartmentManagementPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="Department Management"
         subtitle="Create and manage departments. Only Super Admin can access this page."
       />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-6 lg:p-8">
         {can(P.config.departmentsMake) && (
-        <Card className="border-primary/20 shadow-sm">
+        <Card className="border-amber-400/30 bg-white shadow-sm dark:bg-zinc-950">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Building2 className="h-5 w-5 text-primary" />
+              <Building2 className="h-5 w-5 text-amber-600" />
               Create department
             </CardTitle>
             <CardDescription>
@@ -111,14 +111,14 @@ function DepartmentManagementPage() {
         </Card>
         )}
 
-        <Card>
+        <Card className="overflow-hidden border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Building2 className="h-5 w-5" />
                 All departments
               </CardTitle>
-              <CardDescription>Departments currently registered in WDAS.</CardDescription>
+              <CardDescription>Departments currently registered in VeriFlow.</CardDescription>
             </div>
             <div className="flex items-center gap-3">
               <ActiveStatusFilter value={statusFilter} onChange={setStatusFilter} />

@@ -61,7 +61,7 @@ function DirectoryPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="Directory (AD Users)"
         subtitle={role === "super_admin" ? "All departments â€” synced from Active Directory." : `Users in ${scopeDept} â€” synced from Active Directory.`}
@@ -79,12 +79,12 @@ function DirectoryPage() {
                 </Select>
               </div>
             )}
-            <Button onClick={doSync} disabled={syncing || !can(P.config.adCheck)}>
+            <Button variant="outline" className="border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-950" onClick={doSync} disabled={syncing || !can(P.config.adCheck)}>
               <RefreshCw className={syncing ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
               {syncing ? "Syncing…" : "Sync now"}
             </Button>
             {can(P.config.usersMake) && (
-              <Button onClick={() => setCreateOpen(true)}>
+              <Button className="bg-amber-400 text-zinc-950 hover:bg-amber-300" onClick={() => setCreateOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Create user
               </Button>
@@ -92,8 +92,8 @@ function DirectoryPage() {
           </>
         }
       />
-      <div className="space-y-4 p-6">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="space-y-4 p-6 lg:p-8">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <div className="relative w-full max-w-sm">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input placeholder="Search name, email, AD IDâ€¦" value={q} onChange={(e) => setQ(e.target.value)} className="pl-8" />
@@ -109,7 +109,7 @@ function DirectoryPage() {
           <Badge variant="secondary" className="ml-auto"><Users className="mr-1 h-3 w-3" /> {users.data?.length ?? 0} users</Badge>
         </div>
 
-        <div className="rounded-md border bg-card">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           {users.isLoading ? <LoadingState />
             : users.isError ? <ErrorState message="Could not load directory." onRetry={() => users.refetch()} />
             : !users.data?.length ? <EmptyState title="No users match your filters" />
@@ -132,11 +132,11 @@ function DirectoryPage() {
                     const mgr = users.data.find((x) => x.id === u.managerId);
                     const st = u.status ?? "active";
                     return (
-                      <TableRow key={u.id} className="cursor-pointer hover:bg-muted/40" onClick={() => setSelected(u)}>
+                      <TableRow key={u.id} className="cursor-pointer hover:bg-amber-50/60 dark:hover:bg-amber-400/5" onClick={() => setSelected(u)}>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-7 w-7">
-                              <AvatarFallback className="bg-primary/10 text-[10px] text-primary">
+                              <AvatarFallback className="bg-zinc-950 text-[10px] font-semibold text-amber-400">
                                 {u.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
                               </AvatarFallback>
                             </Avatar>
@@ -202,7 +202,7 @@ function CreateUserPanel({
         <SheetHeader>
           <SheetTitle>Create user</SheetTitle>
           <SheetDescription>
-            Add a local WDAS account. The user can sign in immediately with the username and password you set.
+            Add a local VeriFlow account. The user can sign in immediately with the username and password you set.
           </SheetDescription>
         </SheetHeader>
         <div className="py-4">

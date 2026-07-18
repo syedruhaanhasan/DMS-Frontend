@@ -26,6 +26,18 @@ import type { ApiApprovalMode } from "@/lib/api/types";
 
 type ApiDepartment = { id: string; name: string; code: string; parentDepartmentId: string | null; isActive: boolean };
 
+export interface ActiveDirectorySettings {
+  enabled: boolean;
+  domainName: string;
+  port: number;
+  useSsl: boolean;
+  updatedAtUtc: string | null;
+}
+
+export interface ActiveDirectoryStatus {
+  enabled: boolean;
+}
+
 function withIsActiveQuery(path: string, isActive?: boolean): string {
   if (isActive === undefined) return path;
   const sep = path.includes("?") ? "&" : "?";
@@ -201,6 +213,32 @@ export const wdasConfig = {
   updateUserRoles: async (userId: string, roleIds: string[]) => {
     const dto = await api.put<ApiUserSummaryDto>(`/api/users/${userId}/role`, {
       roleIds,
+    });
+    return mapUser(dto);
+  },
+
+  updateUser: async (
+    userId: string,
+    input: {
+      username: string;
+      displayName: string;
+      email: string;
+      phone?: string | null;
+      title: string;
+      departmentId: string;
+      roleIds: string[];
+      isActive?: boolean;
+    },
+  ) => {
+    const dto = await api.put<ApiUserSummaryDto>(`/api/users/${userId}`, {
+      userPrincipalName: input.username,
+      displayName: input.displayName,
+      email: input.email,
+      phoneNumber: input.phone?.trim() || null,
+      title: input.title,
+      departmentId: input.departmentId,
+      roleIds: input.roleIds,
+      isActive: input.isActive,
     });
     return mapUser(dto);
   },
@@ -632,6 +670,25 @@ export const wdasConfig = {
     outOfOfficeMessage?: string;
     preferredLanguage?: string;
   }) => api.put("/api/users/me/preferences", prefs),
+
+  getActiveDirectorySettings: async (): Promise<ActiveDirectorySettings> =>
+    api.get<ActiveDirectorySettings>("/api/config/active-directory"),
+
+  getActiveDirectoryStatus: async (): Promise<ActiveDirectoryStatus> =>
+    api.get<ActiveDirectoryStatus>("/api/config/active-directory/status"),
+
+  updateActiveDirectorySettings: async (input: {
+    enabled: boolean;
+    domainName?: string;
+    port?: number;
+    useSsl?: boolean;
+  }): Promise<ActiveDirectorySettings> =>
+    api.put<ActiveDirectorySettings>("/api/config/active-directory", {
+      enabled: input.enabled,
+      domainName: input.domainName ?? null,
+      port: input.port ?? null,
+      useSsl: input.useSsl ?? null,
+    }),
 
   forceReassign: async (docId: string, newApproverId: string, reason: string, _actorId: string) => {
     const { wdas } = await import("@/services/wdas");

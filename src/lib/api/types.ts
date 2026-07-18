@@ -44,6 +44,7 @@ export interface ApiUserSummaryDto {
   userPrincipalName: string;
   displayName: string;
   email: string;
+  phoneNumber?: string | null;
   title: string;
   departmentId: string;
   departmentName: string;
@@ -99,6 +100,34 @@ export interface ApiLoginResponse {
   accessToken: string;
   expiresAtUtc: string;
   user: ApiUserSummaryDto;
+}
+
+export interface ApiAuditLogEntryDto {
+  sequenceNumber: number;
+  eventType: string;
+  action: string;
+  actorUserId: string | null;
+  actorDisplayName: string | null;
+  documentId: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  detailsJson: string | null;
+  ipAddress: string | null;
+  createdAtUtc: string;
+  entryHash: string;
+}
+
+export interface ApiAuditExportResult {
+  entries: ApiAuditLogEntryDto[];
+  chainValid: boolean;
+  chainValidationMessage: string | null;
+}
+
+export interface ApiAuditExportRequest {
+  documentId?: string | null;
+  departmentId?: string | null;
+  fromUtc?: string | null;
+  toUtc?: string | null;
 }
 
 export interface ApiWorkflowVersionSummaryDto {

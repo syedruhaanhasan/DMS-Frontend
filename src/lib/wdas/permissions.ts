@@ -116,6 +116,8 @@ export const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: "/documents", permission: P.nav.documents },
   { prefix: "/repository", permission: P.nav.repository },
   { prefix: "/reports", permission: P.actions.reportsView },
+  { prefix: "/audit-log", permission: P.actions.reportsView },
+  { prefix: "/activity-log", permission: P.actions.reportsView },
   { prefix: "/settings/delegation", permission: P.config.delegation },
   { prefix: "/settings", permission: P.nav.settings },
 ];

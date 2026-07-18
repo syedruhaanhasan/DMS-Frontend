@@ -119,6 +119,9 @@ export const wdas = {
   createDocument: async (
     input: Omit<Document, "id" | "createdAt" | "daysPending" | "sla" | "steps" | "status"> & {
       toNames?: string[];
+      /** Reviewers receive the document to review but do not approve/reject. */
+      reviewerIds?: string[];
+      reviewerNames?: string[];
       /** Prefer passing the already-loaded directory users to avoid an extra full-list API call. */
       directoryUsers?: User[];
     },
@@ -126,8 +129,12 @@ export const wdas = {
     pendingFiles: File[] = [],
   ): Promise<Document> => {
     const users = input.directoryUsers?.length ? input.directoryUsers : await wdas.users();
-    const toNames = input.toNames ?? input.toIds.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean) as string[];
-    const recipients = toNames.map((name) => {
+    // Recipients on the document represent reviewers (informational — no approval authority).
+    const reviewerIds = input.reviewerIds ?? [];
+    const reviewerNames =
+      input.reviewerNames ??
+      (reviewerIds.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean) as string[]);
+    const recipients = reviewerNames.map((name) => {
       const u = users.find((x) => x.name === name);
       return { recipientName: name, recipientEmail: u?.email ?? null };
     });
@@ -137,7 +144,7 @@ export const wdas = {
 
     const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>("/api/documents", {
       workflowId: input.workflowId,
-      toRecipients: toNames.join(", "),
+      toRecipients: reviewerNames.join(", "),
       subject: input.subject,
       bodyHtml: input.body,
       amount: input.amount ?? null,
@@ -301,5 +308,16 @@ export const wdas = {
 
   deleteDocument: async (id: string): Promise<void> => {
     await api.delete(`/api/documents/${id}`);
+  },
+
+  exportAudit: async (
+    request: import("@/lib/api/types").ApiAuditExportRequest = {},
+  ): Promise<import("@/lib/api/types").ApiAuditExportResult> => {
+    return api.post<import("@/lib/api/types").ApiAuditExportResult>("/api/audit/export", {
+      documentId: request.documentId ?? null,
+      departmentId: request.departmentId ?? null,
+      fromUtc: request.fromUtc ?? null,
+      toUtc: request.toUtc ?? null,
+    });
   },
 };

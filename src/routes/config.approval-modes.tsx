@@ -32,13 +32,13 @@ function ApprovalModesReference() {
   });
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="Approval Modes"
         subtitle="Reference for the four supported approval modes. Configure a real workflow to save changes."
       />
-      <div className="space-y-4 p-6">
-        <Alert>
+      <div className="space-y-4 p-6 lg:p-8">
+        <Alert className="border-amber-400/40 bg-amber-400/10">
           <Info className="h-4 w-4" />
           <AlertTitle>Sandbox</AlertTitle>
           <AlertDescription>
@@ -46,7 +46,7 @@ function ApprovalModesReference() {
           </AlertDescription>
         </Alert>
 
-        <Card>
+        <Card className="border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <CardHeader className="pb-3"><CardTitle className="text-base">Try the builder</CardTitle></CardHeader>
           <CardContent><ApprovalModeBuilder value={wf} onChange={(patch) => setWf((prev) => ({ ...prev, ...patch }))} /></CardContent>
         </Card>

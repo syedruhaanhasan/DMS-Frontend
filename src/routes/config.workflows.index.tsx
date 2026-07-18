@@ -72,7 +72,7 @@ function WorkflowsPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="Workflows"
         subtitle={can(P.config.workflows) ? "All departments' approval workflows." : `Workflows in ${scopeDept}.`}
@@ -92,13 +92,13 @@ function WorkflowsPage() {
               </div>
             )}
             {can(P.config.workflowsMake) && (
-              <Button asChild><Link to="/config/workflows/new"><Plus className="mr-1 h-4 w-4" /> New workflow</Link></Button>
+              <Button asChild className="bg-amber-400 text-zinc-950 shadow-lg hover:bg-amber-300"><Link to="/config/workflows/new"><Plus className="mr-1 h-4 w-4" /> New workflow</Link></Button>
             )}
           </>
         }
       />
-      <div className="p-6">
-        <div className="rounded-md border bg-card">
+      <div className="p-6 lg:p-8">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           {q.isLoading ? <LoadingState />
             : q.isError ? <ErrorState message="Could not load workflows." onRetry={() => q.refetch()} />
             : !filteredWorkflows.length ? <EmptyState icon={<WorkflowIcon className="h-8 w-8" />} title={statusFilter === "all" ? "No workflows yet" : "No workflows match this filter"} description="Create a workflow to route documents automatically." action={<Button asChild><Link to="/config/workflows/new">Create workflow</Link></Button>} />

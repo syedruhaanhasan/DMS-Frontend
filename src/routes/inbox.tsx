@@ -6,7 +6,7 @@ import { useSession } from "@/lib/wdas/role-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { DocumentTable } from "@/components/wdas/document-table";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
-import { Inbox } from "lucide-react";
+import { AlertTriangle, Clock3, Inbox, ListFilter, ShieldCheck } from "lucide-react";
 import { DelegationBanner } from "@/components/wdas/delegation-banner";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
@@ -27,7 +27,42 @@ function InboxPage() {
     queryFn: () => wdas.listDocuments({ approverId: user.id }),
     enabled: canFetch && !!user.id,
   });
-  const [confirm, setConfirm] = useState<{ id: string; action: "approve" | "reject"; stepId?: string } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    id: string;
+    action: "approve" | "reject";
+    stepId?: string;
+  } | null>(null);
+  const [filter, setFilter] = useState<"all" | "overdue" | "at_risk" | "priority">("all");
+
+  const fifoDocs = [...(q.data ?? [])].sort(
+    (a, b) =>
+      new Date(a.submittedAt ?? a.createdAt).getTime() -
+      new Date(b.submittedAt ?? b.createdAt).getTime(),
+  );
+  const filteredDocs = fifoDocs.filter((doc) => {
+    if (filter === "overdue") return doc.sla === "overdue";
+    if (filter === "at_risk") return doc.sla === "at_risk";
+    if (filter === "priority") return doc.priority !== "Normal";
+    return true;
+  });
+  const filterOptions = [
+    { id: "all" as const, label: "All items", count: fifoDocs.length },
+    {
+      id: "overdue" as const,
+      label: "Overdue",
+      count: fifoDocs.filter((d) => d.sla === "overdue").length,
+    },
+    {
+      id: "at_risk" as const,
+      label: "At risk",
+      count: fifoDocs.filter((d) => d.sla === "at_risk").length,
+    },
+    {
+      id: "priority" as const,
+      label: "Priority",
+      count: fifoDocs.filter((d) => d.priority !== "Normal").length,
+    },
+  ];
 
   const runAction = async (reason?: string) => {
     if (!confirm) return;
@@ -43,21 +78,94 @@ function InboxPage() {
       await q.refetch();
       setConfirm(null);
       toast.success(confirm.action === "approve" ? "Approved" : "Rejected");
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   return (
-    <div>
-      <PageHeader title="Approval Inbox" subtitle="Documents currently awaiting your action." />
+    <div className="min-h-full bg-muted/20">
+      <PageHeader
+        title="Approval Box"
+        subtitle="Review and action your assigned documents in received order."
+      />
       <DelegationBanner />
-      <div className="p-6">
-        <Card>
+      <div className="space-y-4 p-6">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Awaiting action <Inbox className="h-4 w-4 text-primary" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold tracking-tight">{fifoDocs.length}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Assigned to your queue</p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              SLA attention <AlertTriangle className="h-4 w-4 text-warning" />
+            </div>
+            <p className="mt-2 text-2xl font-semibold tracking-tight">
+              {fifoDocs.filter((d) => d.sla !== "on_time").length}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">At risk or overdue</p>
+          </div>
+          <div className="rounded-xl border border-primary/20 bg-primary/[0.06] p-4 shadow-sm">
+            <div className="flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Queue policy <ShieldCheck className="h-4 w-4 text-primary" />
+            </div>
+            <p className="mt-2 text-sm font-semibold">FIFO · Oldest first</p>
+            <p className="mt-1 text-xs text-muted-foreground">Submitted order is preserved</p>
+          </div>
+        </div>
+
+        <Card className="overflow-hidden border-border/70 shadow-sm">
+          <div className="flex flex-col gap-3 border-b bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold">Enterprise approval queue</h2>
+              <p className="text-xs text-muted-foreground">
+                Action the oldest eligible item first.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5" aria-label="Queue filters">
+              <ListFilter className="mr-1 h-4 w-4 text-muted-foreground" />
+              {filterOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setFilter(option.id)}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+                    filter === option.id
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {option.label}
+                  <span className="rounded-full bg-foreground/5 px-1.5 py-0.5 font-mono text-[10px]">
+                    {option.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
           <CardContent className="p-0">
-            {q.isFetching && !q.data ? <LoadingState /> :
-              q.isError ? <ErrorState message="Could not load inbox." onRetry={() => q.refetch()} /> :
-              !q.data?.length ? <EmptyState icon={<Inbox className="h-8 w-8" />} title="Inbox is clear" description="No documents currently need your action." /> :
+            {q.isFetching && !q.data ? (
+              <LoadingState />
+            ) : q.isError ? (
+              <ErrorState message="Could not load inbox." onRetry={() => q.refetch()} />
+            ) : !q.data?.length ? (
+              <EmptyState
+                icon={<Inbox className="h-8 w-8" />}
+                title="Inbox is clear"
+                description="No documents currently need your action."
+              />
+            ) : !filteredDocs.length ? (
+              <EmptyState
+                icon={<Clock3 className="h-8 w-8" />}
+                title="No matching items"
+                description="Try another queue filter."
+              />
+            ) : (
               <DocumentTable
-                docs={q.data}
+                docs={filteredDocs}
                 showActions="approver"
                 onApprove={(id) => {
                   const doc = q.data?.find((d) => d.id === id);
@@ -67,7 +175,8 @@ function InboxPage() {
                   const doc = q.data?.find((d) => d.id === id);
                   setConfirm({ id, action: "reject", stepId: doc?.currentStepId });
                 }}
-              />}
+              />
+            )}
           </CardContent>
         </Card>
       </div>

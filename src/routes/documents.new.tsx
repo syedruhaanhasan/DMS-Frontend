@@ -22,7 +22,7 @@ import {
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, Heading1, Heading2, Table as TableIcon, Image as ImageIcon,
   Link2, Minus, Undo2, Redo2, Check, X, UploadCloud, FileText, Loader2,
-  Highlighter, Palette, Quote, Type, Sparkles, GripVertical,
+  Highlighter, Palette, Quote, Type, Sparkles,
 } from "lucide-react";
 import { AttachmentIcon } from "@/components/wdas/attachments";
 import { ApprovalFlowChart } from "@/components/wdas/approval-flow-chart";
@@ -54,8 +54,9 @@ function NewDoc() {
   const [subject, setSubject] = useState("");
   const [toIds, setToIds] = useState<string[]>([]);
   const [workflowApproverIds, setWorkflowApproverIds] = useState<string[]>([]);
-  const [toQuery, setToQuery] = useState("");
-  const [toFocused, setToFocused] = useState(false);
+  const [reviewerIds, setReviewerIds] = useState<string[]>([]);
+  const [reviewerQuery, setReviewerQuery] = useState("");
+  const [reviewerFocused, setReviewerFocused] = useState(false);
   const [workflowId, setWorkflowId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [amountMandatory, setAmountMandatory] = useState(false);
@@ -69,11 +70,9 @@ function NewDoc() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [confirm, setConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [dragApproverId, setDragApproverId] = useState<string | null>(null);
-  const [dragOverApproverId, setDragOverApproverId] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState("Inter");
   const [fontSize, setFontSize] = useState("16");
-  const [textColor, setTextColor] = useState("#2563eb");
+  const [textColor, setTextColor] = useState("#d97706");
   const [highlightColor, setHighlightColor] = useState("#fef3c7");
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -101,19 +100,40 @@ function NewDoc() {
         role: "approver" as const,
       };
     }),
+    ...reviewerIds.map((id) => {
+      const u = users.find((x) => x.id === id);
+      return {
+        id: `reviewer-${id}`,
+        label: u?.name ?? id,
+        sub: u?.designation || u?.department || "Reviewer",
+        role: "reviewer" as const,
+      };
+    }),
   ];
 
-  const reorderApprover = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
-    setToIds((ids) => {
-      const from = ids.indexOf(fromId);
-      const to = ids.indexOf(toId);
-      if (from < 0 || to < 0) return ids;
-      const next = [...ids];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
+  const moveInList = (list: string[], fromId: string, toId: string): string[] => {
+    const from = list.indexOf(fromId);
+    const to = list.indexOf(toId);
+    if (from < 0 || to < 0 || from === to) return list;
+    const next = [...list];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+  };
+
+  // Drag-to-reorder from the sequence chart. Approver node ids are plain user ids;
+  // reviewer node ids are prefixed with "reviewer-". Only reorder within the same group.
+  const reorderSequence = (fromId: string, toId: string) => {
+    if (toIds.includes(fromId) && toIds.includes(toId)) {
+      setToIds((ids) => moveInList(ids, fromId, toId));
+      return;
+    }
+    const prefix = "reviewer-";
+    if (fromId.startsWith(prefix) && toId.startsWith(prefix)) {
+      const from = fromId.slice(prefix.length);
+      const to = toId.slice(prefix.length);
+      setReviewerIds((ids) => moveInList(ids, from, to));
+    }
   };
 
   useEffect(() => {
@@ -152,6 +172,7 @@ function NewDoc() {
         });
         setToIds(next);
         setWorkflowApproverIds(next);
+        setReviewerIds((rev) => rev.filter((id) => !next.includes(id)));
       } catch {
         /* leave current approvers if workflow detail cannot be loaded */
       }
@@ -206,16 +227,16 @@ function NewDoc() {
     setSaveStatus("saving");
     const t = setTimeout(() => setSaveStatus("saved"), 800);
     return () => clearTimeout(t);
-  }, [subject, body, toIds, workflowId, amount, priority]);
+  }, [subject, body, toIds, reviewerIds, workflowId, amount, priority]);
 
   const isValid = subject.trim() && workflowId && toIds.length > 0
     && (!amountMandatory || (amountNum != null && amountNum > 0));
 
-  const filteredUsers = users.filter((u) => {
-    if (u.id === user.id || toIds.includes(u.id)) return false;
+  const reviewerCandidates = users.filter((u) => {
+    if (u.id === user.id || toIds.includes(u.id) || reviewerIds.includes(u.id)) return false;
     if (u.isActive === false) return false;
-    if (!toQuery.trim()) return true;
-    const q = toQuery.toLowerCase();
+    if (!reviewerQuery.trim()) return true;
+    const q = reviewerQuery.toLowerCase();
     const name = (u.name ?? "").toLowerCase();
     const dept = (u.department ?? "").toLowerCase();
     const email = (u.email ?? "").toLowerCase();
@@ -223,7 +244,13 @@ function NewDoc() {
     return name.includes(q) || dept.includes(q) || email.includes(q) || designation.includes(q);
   }).slice(0, 8);
 
-  const showApproverPicker = toFocused || toQuery.trim().length > 0;
+  const showReviewerPicker = reviewerFocused || reviewerQuery.trim().length > 0;
+  const wizardSteps = [
+    { number: 1, label: "Details", href: "#document-details", complete: Boolean(subject.trim() && workflowId) },
+    { number: 2, label: "Content", href: "#document-content", complete: !editorEmpty },
+    { number: 3, label: "Workflow", href: "#document-workflow", complete: toIds.length > 0 },
+    { number: 4, label: "Review & Submit", href: "#document-review", complete: Boolean(isValid) },
+  ];
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
@@ -244,6 +271,7 @@ function NewDoc() {
         body: readBodyFromEditor(),
         ownerId: user.id,
         toIds,
+        reviewerIds,
         workflowId,
         amount: amountNum,
         priority,
@@ -313,17 +341,46 @@ function NewDoc() {
         title="New Document"
         subtitle="Draft, attach, and route for approval."
         actions={
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {saveStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>}
-            {saveStatus === "saved" && <><Check className="h-3 w-3 text-success" /> All changes saved</>}
+          <div className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-stone-600">
+            {saveStatus === "idle" && <><span className="h-2 w-2 rounded-full bg-stone-300" /> Autosave ready</>}
+            {saveStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin text-amber-700" /> Autosaving…</>}
+            {saveStatus === "saved" && <><Check className="h-3 w-3 text-amber-700" /> All changes saved</>}
           </div>
         }
       />
 
-      <div className="grid gap-6 p-6 lg:grid-cols-3">
+      <div className="border-b border-amber-200/70 bg-amber-50/50 px-6 py-5">
+        <nav className="mx-auto grid max-w-5xl grid-cols-2 gap-3 md:grid-cols-4" aria-label="Document creation steps">
+          {wizardSteps.map((step, index) => (
+            <a
+              key={step.number}
+              href={step.href}
+              className="group flex items-center gap-3 rounded-xl border border-amber-200 bg-white px-3 py-3 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-50"
+            >
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                step.complete ? "bg-amber-500 text-stone-950" : "bg-stone-900 text-amber-100"
+              }`}>
+                {step.complete ? <Check className="h-4 w-4" /> : step.number}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700">Step {step.number}</span>
+                <span className="block truncate text-sm font-semibold text-stone-900">{step.label}</span>
+              </span>
+              {index < wizardSteps.length - 1 && <span className="sr-only">Next step</span>}
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      <div className="grid gap-6 bg-stone-50/50 p-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Header</CardTitle></CardHeader>
+          <Card id="document-details" className="scroll-mt-6 border-amber-200/70 shadow-sm">
+            <CardHeader className="border-b border-amber-100 bg-amber-50/50">
+              <CardTitle className="flex items-center gap-2 text-sm text-stone-900">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-[11px] text-amber-100">1</span>
+                Details
+              </CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -382,139 +439,116 @@ function NewDoc() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label>Approvers <span className="text-destructive">*</span></Label>
+              <div id="document-workflow" className="scroll-mt-6 space-y-2 rounded-xl border border-amber-200/70 bg-amber-50/30 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-[11px] font-semibold text-amber-100">3</span>
+                  <div>
+                    <p className="text-sm font-semibold text-stone-900">Workflow</p>
+                    <p className="text-[11px] text-muted-foreground">Approvers come from the workflow. Add reviewers if others should review it.</p>
+                  </div>
+                </div>
+                <Label>Approvers</Label>
                 <p className="text-xs text-muted-foreground">
                   {workflowId
                     ? isParallel
-                      ? "Workflow users are pre-filled and fixed — you can add more. All selected receive the document at once."
-                      : "Workflow users are pre-filled and fixed. Drag to change order, or add more users."
-                    : "Choose a workflow first — its configured users will be added as approvers automatically."}
+                      ? "Approvers are defined by the selected workflow. All of them receive the document at once."
+                      : "Approvers come from the selected workflow. Drag cards in the sequence chart below to change their order."
+                    : "Choose a workflow first — its configured approvers will appear here."}
                 </p>
-                <div className={isParallel ? "flex flex-wrap gap-1 rounded-md border p-2" : "space-y-1.5 rounded-md border p-2"}>
+                <div className={isParallel ? "flex flex-wrap gap-1 rounded-md border bg-muted/20 p-2" : "space-y-1.5 rounded-md border bg-muted/20 p-2"}>
+                  {toIds.length === 0 && (
+                    <p className="px-1 py-1 text-sm text-muted-foreground">No approvers yet — select a workflow.</p>
+                  )}
                   {toIds.map((id, index) => {
                     const u = users.find((x) => x.id === id);
-                    const fromWorkflow = workflowApproverIds.includes(id);
                     if (isParallel) {
                       return (
                         <Badge key={id} variant="secondary" className="gap-1">
                           {u?.name ?? id}
-                          {!fromWorkflow && (
-                            <button type="button" onClick={() => setToIds((ids) => ids.filter((i) => i !== id))} aria-label="Remove">
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
                         </Badge>
                       );
                     }
-                    const isDragging = dragApproverId === id;
-                    const isDropTarget = dragOverApproverId === id && dragApproverId !== id;
                     return (
                       <div
                         key={id}
-                        draggable
-                        onDragStart={(e) => {
-                          setDragApproverId(id);
-                          e.dataTransfer.effectAllowed = "move";
-                          e.dataTransfer.setData("text/plain", id);
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
-                          if (dragOverApproverId !== id) setDragOverApproverId(id);
-                        }}
-                        onDragLeave={() => {
-                          if (dragOverApproverId === id) setDragOverApproverId(null);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const fromId = e.dataTransfer.getData("text/plain") || dragApproverId;
-                          if (fromId) reorderApprover(fromId, id);
-                          setDragApproverId(null);
-                          setDragOverApproverId(null);
-                        }}
-                        onDragEnd={() => {
-                          setDragApproverId(null);
-                          setDragOverApproverId(null);
-                        }}
-                        className={`flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5 text-sm transition-colors ${
-                          isDragging ? "opacity-50" : ""
-                        } ${isDropTarget ? "border-primary bg-primary/5" : "border-transparent"}`}
+                        className="flex items-center gap-2 rounded-md border border-transparent bg-muted/40 px-2 py-1.5 text-sm"
                       >
-                        <span
-                          className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
-                          aria-label={`Drag to reorder ${u?.name ?? "approver"}`}
-                          title="Drag to reorder"
-                        >
-                          <GripVertical className="h-4 w-4" />
-                        </span>
                         <span className="w-5 shrink-0 text-center text-[11px] font-semibold text-muted-foreground">{index + 1}</span>
                         <span className="min-w-0 flex-1 truncate">
                           {u?.name ?? id}
                           {u?.designation ? <span className="text-muted-foreground"> — {u.designation}</span> : null}
                         </span>
-                        {!fromWorkflow && (
-                          <button
-                            type="button"
-                            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            onClick={() => setToIds((ids) => ids.filter((i) => i !== id))}
-                            aria-label="Remove"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
                       </div>
                     );
                   })}
-                  <input
-                    className="min-w-[120px] w-full flex-1 border-0 bg-transparent p-1 text-sm outline-none"
-                    placeholder={toIds.length ? "Add another…" : "Search or pick users…"}
-                    value={toQuery}
-                    onChange={(e) => setToQuery(e.target.value)}
-                    onFocus={() => setToFocused(true)}
-                    onBlur={() => {
-                      // Delay so click on a suggestion still registers.
-                      window.setTimeout(() => setToFocused(false), 150);
-                    }}
-                  />
                 </div>
-                {showApproverPicker && (
-                  <div className="mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow">
-                    {usersLoading ? (
-                      <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading users…
-                      </p>
-                    ) : usersError ? (
-                      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                        <span className="text-destructive">Could not load users.</span>
-                        <button type="button" className="text-primary hover:underline" onMouseDown={(e) => e.preventDefault()} onClick={() => refetchUsers()}>
-                          Retry
-                        </button>
-                      </div>
-                    ) : filteredUsers.length > 0 ? (
-                      filteredUsers.map((u) => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setToIds((ids) => [...ids, u.id]);
-                            setToQuery("");
-                            setToFocused(true);
-                          }}
-                        >
-                          <span>{u.name} <span className="text-muted-foreground">— {u.designation || u.email}</span></span>
-                          <span className="text-xs text-muted-foreground">{u.department}</span>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="px-3 py-2 text-sm text-muted-foreground">
-                        {toQuery.trim() ? "No matching users." : "No other active users available."}
-                      </p>
-                    )}
+
+                <div className="pt-3">
+                  <Label>Reviewers</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Reviewers receive the document to review — they do not approve or reject it.
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1 rounded-md border p-2">
+                    {reviewerIds.map((id) => {
+                      const u = users.find((x) => x.id === id);
+                      return (
+                        <Badge key={id} variant="secondary" className="gap-1">
+                          {u?.name ?? id}
+                          <button type="button" onClick={() => setReviewerIds((ids) => ids.filter((i) => i !== id))} aria-label="Remove reviewer">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                    <input
+                      className="min-w-[120px] w-full flex-1 border-0 bg-transparent p-1 text-sm outline-none"
+                      placeholder={reviewerIds.length ? "Add another reviewer…" : "Search or pick reviewers…"}
+                      value={reviewerQuery}
+                      onChange={(e) => setReviewerQuery(e.target.value)}
+                      onFocus={() => setReviewerFocused(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setReviewerFocused(false), 150);
+                      }}
+                    />
                   </div>
-                )}
+                  {showReviewerPicker && (
+                    <div className="mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow">
+                      {usersLoading ? (
+                        <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading users…
+                        </p>
+                      ) : usersError ? (
+                        <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                          <span className="text-destructive">Could not load users.</span>
+                          <button type="button" className="text-primary hover:underline" onMouseDown={(e) => e.preventDefault()} onClick={() => refetchUsers()}>
+                            Retry
+                          </button>
+                        </div>
+                      ) : reviewerCandidates.length > 0 ? (
+                        reviewerCandidates.map((u) => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setReviewerIds((ids) => [...ids, u.id]);
+                              setReviewerQuery("");
+                              setReviewerFocused(true);
+                            }}
+                          >
+                            <span>{u.name} <span className="text-muted-foreground">— {u.designation || u.email}</span></span>
+                            <span className="text-xs text-muted-foreground">{u.department}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">
+                          {reviewerQuery.trim() ? "No matching users." : "No other active users available."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -528,18 +562,19 @@ function NewDoc() {
               {workflowId && (
                 <div className="space-y-2">
                   <div>
-                    <p className="text-xs font-medium text-foreground">Approval chart</p>
+                    <p className="text-xs font-medium text-foreground">Sequence chart</p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      Creator plus every approver you add — updates live as you build the list.
+                      Creator, workflow approvers, and any reviewers you add.
                     </p>
                   </div>
                   <ApprovalFlowChart
-                    nodes={toIds.length > 0 ? approvalFlowNodes : [{ ...approvalFlowNodes[0] }]}
+                    nodes={toIds.length > 0 || reviewerIds.length > 0 ? approvalFlowNodes : [{ ...approvalFlowNodes[0] }]}
                     mode={isParallel ? "parallel" : "sequential"}
+                    onReorder={isParallel ? undefined : reorderSequence}
                   />
                   {toIds.length === 0 && (
                     <p className="text-[11px] text-muted-foreground">
-                      Add at least one approver above to complete the chart.
+                      Select a workflow to populate the approval chart.
                     </p>
                   )}
                 </div>
@@ -547,9 +582,14 @@ function NewDoc() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id="document-content" className="scroll-mt-6 border-amber-200/70 shadow-sm">
             <div className="sticky top-0 z-20 border-b bg-card/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/80">
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Body</CardTitle></CardHeader>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-[11px] text-amber-100">2</span>
+                  Content
+                </CardTitle>
+              </CardHeader>
               <div className="space-y-2 px-6 pb-3">
                 <div className="flex flex-wrap items-center gap-1 rounded-md border bg-muted/40 p-1">
                 <ToolbarBtn onClick={() => applyFormat("bold")}><Bold className="h-3.5 w-3.5" /></ToolbarBtn>
@@ -626,14 +666,14 @@ function NewDoc() {
                   onFocus={() => setEditorFocused(true)}
                   onBlur={handleEditorBlur}
                   onInput={handleEditorInput}
-                  className="min-h-[320px] rounded-md border bg-card p-4 text-sm leading-7 outline-none focus:ring-2 focus:ring-ring [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_blockquote]:rounded-md [&_blockquote]:border-l-4 [&_blockquote]:border-primary/30 [&_blockquote]:bg-muted/40 [&_blockquote]:p-3 [&_table]:w-full [&_table]:border-collapse [&_table_td]:border [&_table_td]:border-border [&_table_td]:p-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
+                  className="min-h-[320px] rounded-md border bg-card p-4 text-sm leading-7 outline-none focus:ring-2 focus:ring-amber-400 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_blockquote]:rounded-md [&_blockquote]:border-l-4 [&_blockquote]:border-amber-400 [&_blockquote]:bg-amber-50 [&_blockquote]:p-3 [&_table]:w-full [&_table]:border-collapse [&_table_td]:border [&_table_td]:border-border [&_table_td]:p-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
                 />
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Attachments</CardTitle></CardHeader>
+          <Card className="border-amber-200/70 shadow-sm">
+            <CardHeader><CardTitle className="text-sm">Content attachments</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <label
                 htmlFor="upload"
@@ -677,13 +717,18 @@ function NewDoc() {
 
         <div>
           <div className="sticky top-0 z-10 space-y-3 self-start">
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Actions</CardTitle></CardHeader>
+            <Card id="document-review" className="scroll-mt-6 border-stone-800 shadow-md">
+              <CardHeader className="bg-stone-950 text-white">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-[11px] text-stone-950">4</span>
+                  Review & Submit
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-2">
                 <Button variant="outline" className="w-full" disabled={submitting} onClick={() => submit(true)}>
                   {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</> : "Save as Draft"}
                 </Button>
-                <Button className="w-full" disabled={!isValid || submitting} onClick={() => setConfirm(true)}>
+                <Button className="w-full bg-amber-500 font-semibold text-stone-950 hover:bg-amber-400" disabled={!isValid || submitting} onClick={() => setConfirm(true)}>
                   Submit for approval
                 </Button>
                 {!isValid && <p className="text-xs text-muted-foreground">Complete required fields to submit.</p>}

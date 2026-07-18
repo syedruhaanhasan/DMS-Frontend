@@ -101,18 +101,18 @@ function DocumentTypesPage() {
   };
 
   return (
-    <div>
+    <div className="min-h-full bg-[#f6f4ef] dark:bg-[#090b0f]">
       <PageHeader
         title="Document Types"
         subtitle="Manage document types used when creating workflows. Only Super Admin can add, update, or delete."
       />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-6 lg:p-8">
         {can(P.config.documentTypesMake) && (
-        <Card className="border-primary/20 shadow-sm">
+        <Card className="border-amber-400/30 bg-white shadow-sm dark:bg-zinc-950">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileType className="h-5 w-5 text-primary" />
+              <FileType className="h-5 w-5 text-amber-600" />
               Create document type
             </CardTitle>
             <CardDescription>
@@ -125,7 +125,7 @@ function DocumentTypesPage() {
         </Card>
         )}
 
-        <Card>
+        <Card className="overflow-hidden border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">

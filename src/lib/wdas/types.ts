@@ -34,6 +34,7 @@ export interface User {
   departmentId?: string;
   managerId?: string;
   email: string;
+  phone?: string;
   adId?: string;
   username?: string;
   appRole?: AppRole;

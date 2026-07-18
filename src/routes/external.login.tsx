@@ -94,9 +94,9 @@ export function ExternalShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh flex-col bg-muted/30">
       <header className="border-b bg-card px-6 py-3">
         <div className="mx-auto flex max-w-2xl items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-sm font-bold text-primary-foreground">W</div>
+          <img src="/veriflow-logo.jpg" alt="VeriFlow" className="h-8 w-8 rounded bg-white object-contain p-0.5" />
           <div>
-            <p className="text-sm font-semibold">WDAS</p>
+            <p className="text-sm font-semibold">VeriFlow</p>
             <p className="text-[11px] text-muted-foreground">External Approver Portal</p>
           </div>
         </div>

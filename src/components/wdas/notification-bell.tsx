@@ -26,12 +26,12 @@ export function NotificationBell() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative min-h-11 min-w-11 rounded-full border border-border/70 bg-card/70 shadow-sm" aria-label={`Notifications (${unread} unread)`}>
+        <Button variant="ghost" size="icon" className="relative h-9 min-h-9 w-9 min-w-9 rounded-lg border border-white/15 bg-white/[0.06] text-white shadow-none hover:bg-white/10 hover:text-white" aria-label={`Notifications (${unread} unread)`}>
           <Bell className="h-5 w-5" />
           {unread > 0 && (
             <span
               aria-hidden="true"
-              className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground"
+              className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
             >
               {unread > 9 ? "9+" : unread}
             </span>

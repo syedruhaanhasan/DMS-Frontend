@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSession } from "@/lib/wdas/role-context";
 import { ApiError } from "@/lib/api/client";
-import { Building2, Loader2, ShieldCheck, AlertCircle, Crown } from "lucide-react";
+import { Building2, Loader2, ShieldCheck, AlertCircle, Crown, Eye, EyeOff, LockKeyhole, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -44,6 +44,8 @@ function Login() {
   const [password, setPassword] = useState("SuperAdmin123!");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   useEffect(() => {
     if (isAuthed) {
@@ -85,99 +87,124 @@ function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(46,116,181,0.14),transparent_30%),linear-gradient(135deg,#f7f9fc_0%,#eef4fb_100%)] p-4">
-      <Card className="w-full max-w-md overflow-hidden border-primary/10 bg-card/95 p-0 shadow-[0_20px_45px_-24px_rgba(31,56,100,0.45)]">
-        <div className="bg-gradient-to-br from-primary/10 via-card to-card px-8 pb-6 pt-8 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-            <Building2 className="h-7 w-7" />
+    <main className="grid min-h-screen bg-[#FAFAF7] lg:grid-cols-[55%_45%]">
+      <section className="topographic-pattern relative hidden overflow-hidden bg-[#0D0D0F] p-12 text-[#F5F5F2] lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <div className="relative z-10 flex items-center gap-3">
+          <img src="/veriflow-logo.jpg" alt="VeriFlow" className="h-11 w-11 rounded-xl bg-white object-contain p-1" />
+          <div>
+            <p className="text-base font-semibold tracking-[0.12em]">VeriFlow</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-white/45">Enterprise document control</p>
           </div>
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">WDAS</h1>
-          <p className="text-sm text-muted-foreground">Workflow-Based Document Approval System</p>
         </div>
 
-        <form onSubmit={onSubmit} className="px-8 pb-8 text-left">
-          <div className="mt-4 flex items-center justify-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-sm text-muted-foreground">
-            <ShieldCheck className="h-4 w-4 text-success" />
-            Sign in to continue
+        <div className="relative z-10 max-w-xl">
+          <div className="mb-6 h-1 w-14 rounded-full bg-[#FFC400]" />
+          <h1 className="text-balance text-4xl font-semibold leading-[1.14] tracking-[-0.035em] xl:text-5xl">
+            Documents. Workflows.<br />Approvals. One System.
+          </h1>
+          <p className="mt-5 max-w-lg text-base leading-7 text-white/55">
+            Secure document governance and auditable approvals for regulated organizations.
+          </p>
+        </div>
+
+        <div className="relative z-10 grid grid-cols-3 gap-6 border-t border-white/10 pt-7">
+          {[
+            ["99.99%", "Platform uptime"],
+            ["2.4M+", "Documents processed"],
+            ["180+", "Organizations"],
+          ].map(([value, label]) => (
+            <div key={label}>
+              <p className="tabular-nums text-xl font-semibold text-[#FFC400]">{value}</p>
+              <p className="mt-1 text-xs text-white/45">{label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-10">
+        <div className="w-full max-w-[440px]">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <img src="/veriflow-logo.jpg" alt="VeriFlow" className="h-10 w-10 rounded-xl bg-white object-contain p-0.5" />
+            <p className="font-semibold tracking-[0.12em]">VeriFlow</p>
           </div>
 
-          {error && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="mt-6 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                placeholder="superadmin"
-                disabled={loading}
-                autoFocus
-              />
+          <Card className="border-[#E4E4E0] bg-white p-7 shadow-[0_1px_2px_rgba(13,13,15,0.04)] sm:p-9">
+            <div className="mb-7">
+              <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#111114] text-[#FFC400]">
+                <LockKeyhole className="h-5 w-5" />
+              </div>
+              <h2 className="text-2xl font-semibold tracking-[-0.025em] text-[#111114]">Welcome back</h2>
+              <p className="mt-1.5 text-sm text-[#6B6B70]">Sign in to your secure workspace.</p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                disabled={loading}
-              />
-            </div>
-          </div>
 
-          <Button type="submit" className="mt-6 w-full" size="lg" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in…
-              </>
-            ) : (
-              "Sign in"
-            )}
-          </Button>
+            <form onSubmit={onSubmit}>
+              {error && (
+                <Alert variant="destructive" className="mb-5 border-[#D64545]/25 bg-[#D64545]/5">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
 
-          <div className="mt-6 space-y-2">
-            <p className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Quick sign-in (dev)
-            </p>
-            <div className="grid gap-2">
-              {TEST_ACCOUNTS.map((account) => {
-                const Icon = account.icon;
-                const active = username === account.username;
-                return (
-                  <button
-                    key={account.username}
-                    type="button"
-                    onClick={() => fillAccount(account)}
-                    disabled={loading}
-                    className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50 ${
-                      active ? "border-primary bg-primary/5" : "border-border"
-                    }`}
-                  >
-                    <Icon className={`h-4 w-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium text-foreground">{account.label}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {account.username} · {account.description}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </form>
-      </Card>
-    </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Email or Employee ID</Label>
+                  <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="name@organization.com" disabled={loading} autoFocus className="h-11" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••" disabled={loading} className="h-11 pr-11" />
+                    <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-[#6B6B70] hover:text-[#111114]" aria-label={showPassword ? "Hide password" : "Show password"}>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between text-sm">
+                <label className="flex cursor-pointer items-center gap-2 text-[#55555B]">
+                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 accent-[#FFC400]" />
+                  Remember me
+                </label>
+                <button type="button" className="font-medium text-[#111114] underline decoration-[#FFC400] decoration-2 underline-offset-4">Forgot password?</button>
+              </div>
+
+              <Button type="submit" className="mt-6 h-11 w-full bg-[#FFC400] font-semibold text-[#111114] hover:bg-[#E6B000]" disabled={loading}>
+                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</> : "Sign In"}
+              </Button>
+
+              <div className="my-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-[#E4E4E0]" />
+                <span className="text-xs text-[#8A8A92]">or</span>
+                <div className="h-px flex-1 bg-[#E4E4E0]" />
+              </div>
+
+              <Button type="button" variant="outline" className="h-11 w-full border-[#D8D8D4] bg-white text-[#111114] hover:bg-[#F3F3EF]">
+                <Building2 className="mr-2 h-4 w-4" /> Sign in with SSO / Active Directory
+              </Button>
+            </form>
+
+            <details className="mt-6 border-t border-[#E4E4E0] pt-4">
+              <summary className="cursor-pointer text-center text-xs font-medium text-[#6B6B70]">Development accounts</summary>
+              <div className="mt-3 grid gap-2">
+                {TEST_ACCOUNTS.map((account) => {
+                  const Icon = account.icon;
+                  const active = username === account.username;
+                  return (
+                    <button key={account.username} type="button" onClick={() => fillAccount(account)} disabled={loading} className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-left text-xs hover:bg-[#FAFAF7] ${active ? "border-[#FFC400] bg-[#FFF9E6]" : "border-[#E4E4E0]"}`}>
+                      <Icon className="h-4 w-4 text-[#6B6B70]" />
+                      <span className="flex-1"><strong className="block text-[#111114]">{account.label}</strong><span className="text-[#6B6B70]">{account.username}</span></span>
+                      {active && <CheckCircle2 className="h-4 w-4 text-[#2E9E5B]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </details>
+          </Card>
+
+          <p className="mt-6 text-center text-xs text-[#8A8A92]">VeriFlow v2.6.0 · © 2026 Enterprise Systems</p>
+        </div>
+      </section>
+    </main>
   );
 }

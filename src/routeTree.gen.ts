@@ -15,6 +15,8 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as AuditLogRouteImport } from './routes/audit-log'
+import { Route as ActivityLogRouteImport } from './routes/activity-log'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as DocumentsIndexRouteImport } from './routes/documents.index'
@@ -69,6 +71,16 @@ const InboxRoute = InboxRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditLogRoute = AuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivityLogRoute = ActivityLogRouteImport.update({
+  id: '/activity-log',
+  path: '/activity-log',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -199,6 +211,8 @@ const ConfigWorkflowsIdRoute = ConfigWorkflowsIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activity-log': typeof ActivityLogRoute
+  '/audit-log': typeof AuditLogRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
@@ -232,6 +246,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activity-log': typeof ActivityLogRoute
+  '/audit-log': typeof AuditLogRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
@@ -266,6 +282,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activity-log': typeof ActivityLogRoute
+  '/audit-log': typeof AuditLogRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/inbox': typeof InboxRoute
   '/login': typeof LoginRoute
@@ -301,6 +319,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activity-log'
+    | '/audit-log'
     | '/dashboard'
     | '/inbox'
     | '/login'
@@ -334,6 +354,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activity-log'
+    | '/audit-log'
     | '/dashboard'
     | '/inbox'
     | '/login'
@@ -367,6 +389,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/activity-log'
+    | '/audit-log'
     | '/dashboard'
     | '/inbox'
     | '/login'
@@ -401,6 +425,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivityLogRoute: typeof ActivityLogRoute
+  AuditLogRoute: typeof AuditLogRoute
   DashboardRoute: typeof DashboardRouteWithChildren
   InboxRoute: typeof InboxRoute
   LoginRoute: typeof LoginRoute
@@ -472,6 +498,20 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/audit-log': {
+      id: '/audit-log'
+      path: '/audit-log'
+      fullPath: '/audit-log'
+      preLoaderRoute: typeof AuditLogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activity-log': {
+      id: '/activity-log'
+      path: '/activity-log'
+      fullPath: '/activity-log'
+      preLoaderRoute: typeof ActivityLogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -680,6 +720,8 @@ const DocumentsIdRouteWithChildren = DocumentsIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivityLogRoute: ActivityLogRoute,
+  AuditLogRoute: AuditLogRoute,
   DashboardRoute: DashboardRouteWithChildren,
   InboxRoute: InboxRoute,
   LoginRoute: LoginRoute,

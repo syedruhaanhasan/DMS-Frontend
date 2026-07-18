@@ -28,6 +28,15 @@ function daysSince(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
 }
 
+/** API entity IDs are strings in JSON but may arrive as numbers in edge cases. */
+function apiId(value: string | number | null | undefined): string {
+  return value == null ? "" : String(value);
+}
+
+function apiIdOpt(value: string | number | null | undefined): string | undefined {
+  return value == null ? undefined : String(value);
+}
+
 function mapDepartment(name: string | null | undefined): Department {
   const safe = (name ?? "").trim() || "—";
   const known: Department[] = ["Finance", "HR", "Procurement", "Legal", "Operations", "Information Technology"];
@@ -154,12 +163,13 @@ export function mapUser(dto: ApiUserSummaryDto): User {
     : [];
 
   return {
-    id: dto.id,
+    id: apiId(dto.id),
     name: dto.displayName,
     designation: dto.title,
     department: mapDepartment(dto.departmentName),
-    departmentId: dto.departmentId,
+    departmentId: apiId(dto.departmentId),
     email: dto.email,
+    phone: dto.phoneNumber ?? undefined,
     adId: dto.adObjectId,
     username: dto.userPrincipalName,
     status: dto.isActive === false ? "disabled" : "active",
@@ -222,8 +232,8 @@ function mapStep(step: ApiWorkflowStepDto): ApprovalStep {
   const actions = step.actions ?? [];
   const lastAction = actions[actions.length - 1];
   return {
-    id: step.id,
-    approverId: step.approverUserId ?? "",
+    id: apiId(step.id),
+    approverId: apiId(step.approverUserId),
     order: step.stepOrder,
     status: mapStepStatus(step.status),
     actedAt: step.completedAtUtc ?? lastAction?.actionAtUtc,
@@ -242,7 +252,7 @@ function mapAttachmentType(fileName: string): import("@/lib/wdas/types").Attachm
 
 export function mapAttachment(dto: import("./types").ApiAttachmentDto): import("@/lib/wdas/types").Attachment {
   return {
-    id: dto.id,
+    id: apiId(dto.id),
     name: dto.logicalName ?? dto.fileName,
     type: mapAttachmentType(dto.fileName),
     size: `${Math.round(dto.fileSizeBytes / 1024)} KB`,
@@ -261,13 +271,13 @@ export function mapDocument(
   const createdAt = submitted ?? new Date().toISOString();
 
   return {
-    id: dto.id,
+    id: apiId(dto.id),
     subject: dto.subject,
     body: dto.bodyHtml,
-    ownerId: dto.ownerUserId,
+    ownerId: apiId(dto.ownerUserId),
     ownerName: dto.ownerDisplayName,
-    toIds: dto.adHocApproverUserIds ?? [],
-    workflowId: dto.workflowId,
+    toIds: (dto.adHocApproverUserIds ?? []).map(apiId),
+    workflowId: apiId(dto.workflowId),
     amount: dto.amount ?? undefined,
     priority: mapPriority(dto.priority),
     status: mapDocStatus(dto.status),
@@ -275,7 +285,7 @@ export function mapDocument(
     submittedAt: dto.submittedAtUtc ?? undefined,
     daysPending: submitted ? daysSince(submitted) : 0,
     sla: mapSla(activeStep?.isSlaBreached ? "Overdue" : "OnTime", activeStep?.isSlaBreached),
-    currentStepId: activeStep?.id,
+    currentStepId: apiIdOpt(activeStep?.id),
     steps,
     attachments,
     refId: documentRefId(dto.recordNumber),
@@ -290,12 +300,12 @@ export function mapDocument(
 export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: string): Document {
   const submitted = dto.submittedAtUtc ?? new Date().toISOString();
   return {
-    id: dto.documentId,
+    id: apiId(dto.documentId),
     refId: documentRefId(dto.recordNumber),
     recordNumber: dto.recordNumber,
     subject: dto.subject,
     body: "",
-    ownerId: dto.ownerUserId ?? ownerId ?? "",
+    ownerId: apiId(dto.ownerUserId ?? ownerId),
     toIds: [],
     workflowId: "",
     priority: "Normal",
@@ -304,7 +314,7 @@ export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: str
     submittedAt: dto.submittedAtUtc ?? undefined,
     daysPending: dto.submittedAtUtc ? daysSince(dto.submittedAtUtc) : 0,
     sla: mapSla(dto.slaClassification, dto.isSlaBreached),
-    currentStepId: dto.activeStepId ?? undefined,
+    currentStepId: apiIdOpt(dto.activeStepId),
     steps: [],
     attachments: [],
   };
@@ -313,7 +323,7 @@ export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: str
 export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
   const submitted = dto.submittedAtUtc ?? new Date().toISOString();
   return {
-    id: dto.documentId,
+    id: apiId(dto.documentId),
     refId: documentRefId(dto.recordNumber),
     recordNumber: dto.recordNumber,
     archiveDocumentId: dto.archiveDocumentId ?? undefined,
@@ -347,7 +357,7 @@ export function mapWorkflow(dto: ApiWorkflowDto, departmentName?: string): Workf
   const financial = /purchase|financial|invoice|payment|expense/i.test(dto.documentType + dto.name);
 
   return {
-    id: dto.id,
+    id: apiId(dto.id),
     name: dto.name,
     type: financial ? "financial" : "non_financial",
     description: dto.description ?? "",

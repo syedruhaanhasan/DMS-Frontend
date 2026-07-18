@@ -6,7 +6,7 @@ import type { ComponentType, SVGProps } from "react";
 const STATUS_CLASSES: Record<DocStatus, string> = {
   draft: "bg-neutral/40 text-neutral-foreground border-border",
   pending: "bg-info/10 text-info border-info/25",
-  ready_to_finalize: "bg-primary/10 text-primary border-primary/25",
+  ready_to_finalize: "bg-primary/15 text-foreground border-primary/45",
   approved: "bg-success/10 text-success border-success/25",
   rejected: "bg-destructive/10 text-destructive border-destructive/25",
   returned: "bg-warning/15 text-warning-foreground border-warning/35",

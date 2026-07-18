@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/lib/wdas/theme-context";
 import { UsersProvider } from "@/lib/wdas/users-context";
 import { AppShell } from "@/components/wdas/app-shell";
 import { Toaster } from "@/components/ui/sonner";
+import { LockKeyhole } from "lucide-react";
 
 function NotFoundComponent() {
   return (
@@ -57,9 +58,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "WDAS · Workflow Document Approval System" },
+      { title: "VeriFlow · Document Management & Approval System" },
       { name: "description", content: "Enterprise document routing, review, and approval platform." },
-      { property: "og:title", content: "WDAS · Workflow Document Approval System" },
+      { property: "og:title", content: "VeriFlow · Document Management & Approval System" },
       { property: "og:description", content: "Enterprise document routing, review, and approval platform." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -69,7 +70,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/veriflow-logo.jpg", type: "image/jpeg" },
     ],
   }),
   shellComponent: RootShell,
@@ -106,17 +107,28 @@ function AuthedGate() {
     if (!isAuthed && !isLogin) router.navigate({ to: "/login" });
     if (isAuthed && pathname === "/login") router.navigate({ to: "/dashboard" });
     if (isAuthed && pathname === "/") router.navigate({ to: "/dashboard" });
-    if (isAuthed && !isLogin) {
-      // Dashboard is always the safe landing page for authenticated users.
-      if (pathname === "/dashboard") return;
-      const required = requiredPermissionForPath(pathname);
-      if (required && !can(required)) {
-        router.navigate({ to: "/dashboard" });
-      }
-    }
+    if (isAuthed && !isLogin && pathname === "/dashboard") return;
   }, [hydrated, isAuthed, isLogin, isExternal, isDesign, pathname, router, can]);
 
+  const required = isAuthed && !isLogin ? requiredPermissionForPath(pathname) : null;
+  const accessDenied = Boolean(required && !can(required));
+
   if (isExternal || isDesign || isLogin || !isAuthed) return <Outlet />;
+  if (accessDenied) {
+    return (
+      <div className="amber-grid flex min-h-screen items-center justify-center bg-[#0D0D0F] px-6 text-center text-[#F5F5F2]">
+        <div className="max-w-md">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl border border-[#FFC400]/30 bg-[#FFC400]/10 text-[#FFC400]">
+            <LockKeyhole className="h-9 w-9" />
+          </div>
+          <p className="mt-7 text-xs font-semibold uppercase tracking-[0.2em] text-[#FFC400]">403 · Access denied</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">Restricted Area</h1>
+          <p className="mt-3 text-sm leading-6 text-white/50">Super Admin access is required to view this workspace.</p>
+          <Link to="/dashboard" className="mt-7 inline-flex h-10 items-center justify-center rounded-lg bg-[#FFC400] px-5 text-sm font-semibold text-[#111114] hover:bg-[#E6B000]">Return to dashboard</Link>
+        </div>
+      </div>
+    );
+  }
   return <AppShell><Outlet /></AppShell>;
 }
 

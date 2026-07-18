@@ -8,18 +8,36 @@ import { useDocumentQuery, useCanFetchDocuments } from "@/lib/wdas/use-document-
 import { useUserById, useUsers } from "@/lib/wdas/users-context";
 import { StatusBadge, SlaBadge, PriorityBadge } from "@/components/wdas/badges";
 import { ApprovalTrail } from "@/components/wdas/approval-trail";
+import { WorkflowStepper } from "@/components/wdas/workflow-stepper";
+import { CommentThread } from "@/components/wdas/comment-thread";
 import { AttachmentList } from "@/components/wdas/attachments";
 import { LoadingState, ErrorState } from "@/components/wdas/data-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { formatPKR, absTime } from "@/lib/wdas/format";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, Download, XCircle, Hash, Trash2, Pencil, Check, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Lock,
+  Download,
+  XCircle,
+  Hash,
+  Trash2,
+  Pencil,
+  Check,
+  Loader2,
+} from "lucide-react";
 import type { Document, Priority } from "@/lib/wdas/types";
 
 export const Route = createFileRoute("/documents/$id")({
@@ -97,7 +115,9 @@ function DetailPage() {
   const isReturned = doc.status === "returned";
   const isDraft = doc.status === "draft";
   const rejectionStep = doc.steps.find((s) => s.status === "rejected");
-  const canCancel = doc.ownerId === user.id && (doc.status === "pending" || isReturned || isDraft || doc.status === "ready_to_finalize");
+  const canCancel =
+    doc.ownerId === user.id &&
+    (doc.status === "pending" || isReturned || isDraft || doc.status === "ready_to_finalize");
   const canFinalize = doc.ownerId === user.id && doc.status === "ready_to_finalize";
   const canDelete = doc.ownerId === user.id && (isDraft || isCancelled);
   const canUpdate = doc.ownerId === user.id && (isRejected || isReturned || isDraft);
@@ -134,7 +154,9 @@ function DetailPage() {
         }
       }
       beginEdit(doc);
-      toast.message("Edit mode", { description: "Update the fields below, then save or resubmit." });
+      toast.message("Edit mode", {
+        description: "Update the fields below, then save or resubmit.",
+      });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -193,7 +215,9 @@ function DetailPage() {
       toast.success("Document finalized", { description: `Archive ID: ${repo.archiveDocumentId}` });
       qc.invalidateQueries();
       q.refetch();
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   const downloadArchive = async (format: "pdf" | "html") => {
@@ -201,7 +225,9 @@ function DetailPage() {
     try {
       await wdas.downloadArchive(doc.archiveDocumentId, format);
       toast.success(format === "pdf" ? "PDF archive downloaded" : "HTML archive downloaded");
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   const previewAttachment = async (attachmentId: string) => {
@@ -213,7 +239,9 @@ function DetailPage() {
       if (!res.ok) throw new Error("Could not open preview");
       const blob = await res.blob();
       window.open(URL.createObjectURL(blob), "_blank");
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   const exportAuditTrail = () => {
@@ -240,7 +268,9 @@ function DetailPage() {
       toast.success("Document cancelled");
       qc.invalidateQueries();
       router.navigate({ to: "/documents" });
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   const runDelete = async () => {
@@ -249,15 +279,19 @@ function DetailPage() {
       toast.success("Document deleted");
       qc.invalidateQueries();
       router.navigate({ to: "/documents" });
-    } catch (e) { toast.error((e as Error).message); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   };
 
   return (
-    <div>
+    <div className="min-h-full bg-muted/20">
       <div className="sticky top-0 z-20 border-b bg-card/95 px-6 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="mb-3">
           <Button asChild variant="ghost" size="sm" className="-ml-2 h-7 gap-1">
-            <Link to="/documents"><ArrowLeft className="h-4 w-4" /> Back</Link>
+            <Link to="/documents">
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Link>
           </Button>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -279,7 +313,9 @@ function DetailPage() {
                   <span className="rounded-md border bg-muted/60 px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
                     v{doc.revisionNumber ?? 1}
                   </span>
-                  {isFinalized && <Lock className="h-4 w-4 text-muted-foreground" aria-label="Locked" />}
+                  {isFinalized && (
+                    <Lock className="h-4 w-4 text-muted-foreground" aria-label="Locked" />
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {owner?.name} · {owner?.department} · Created {absTime(doc.createdAt)}
@@ -301,14 +337,28 @@ function DetailPage() {
             )}
             {showEditor && (
               <>
-                <Button size="sm" variant="outline" disabled={saving} onClick={() => setEditing(false)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => setEditing(false)}
+                >
                   Cancel edit
                 </Button>
-                <Button size="sm" variant="outline" disabled={saving || !editSubject.trim()} onClick={() => void saveDocument(false)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving || !editSubject.trim()}
+                  onClick={() => void saveDocument(false)}
+                >
                   {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                   Save
                 </Button>
-                <Button size="sm" disabled={saving || !editSubject.trim()} onClick={() => setConfirmResubmit(true)}>
+                <Button
+                  size="sm"
+                  disabled={saving || !editSubject.trim()}
+                  onClick={() => setConfirmResubmit(true)}
+                >
                   <Check className="mr-1.5 h-3.5 w-3.5" />
                   Resubmit
                 </Button>
@@ -328,11 +378,17 @@ function DetailPage() {
       {isFinalized && (
         <div className="mx-6 mt-6 flex items-center gap-3 rounded-md border border-info/30 bg-info/10 px-4 py-3 text-sm">
           <Lock className="h-4 w-4 shrink-0 text-info" />
-          <span className="flex-1">This document is finalized and locked. Contents are read-only and immutable.</span>
+          <span className="flex-1">
+            This document is finalized and locked. Contents are read-only and immutable.
+          </span>
           {doc.archiveDocumentId && (
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => downloadArchive("pdf")}><Download className="mr-1.5 h-3.5 w-3.5" /> PDF</Button>
-              <Button size="sm" variant="ghost" onClick={() => downloadArchive("html")}>HTML</Button>
+              <Button size="sm" variant="outline" onClick={() => downloadArchive("pdf")}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => downloadArchive("html")}>
+                HTML
+              </Button>
             </div>
           )}
         </div>
@@ -390,57 +446,99 @@ function DetailPage() {
         </div>
       )}
 
-      <div className="grid gap-6 p-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Document body</CardTitle></CardHeader>
-            <CardContent>
+      <div className="grid gap-5 p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">
+        <div className="min-w-0 space-y-4">
+          <Card className="overflow-hidden border-border/70 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between border-b py-3">
+              <div>
+                <CardTitle className="text-sm">
+                  {showEditor ? "Edit document content" : "Document preview"}
+                </CardTitle>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {showEditor
+                    ? "Changes are saved as the current revision"
+                    : "Read-only approval copy"}
+                </p>
+              </div>
+              <span className="rounded border bg-muted/50 px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground">
+                v{doc.revisionNumber ?? 1}
+              </span>
+            </CardHeader>
+            <CardContent className={showEditor ? "p-5" : "bg-muted/40 p-4 sm:p-8"}>
               {showEditor ? (
                 <div
                   ref={editorRef}
                   contentEditable
                   suppressContentEditableWarning
-                  className="min-h-[220px] rounded-md border bg-background p-4 prose prose-sm max-w-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="prose prose-sm min-h-[520px] max-w-none rounded-md border bg-background p-6 focus:outline-none focus:ring-2 focus:ring-ring"
                   onInput={() => {
                     const html = editorRef.current?.innerHTML ?? "";
                     setEditBody(isBodyEmpty(html) ? "" : html);
                   }}
                 />
               ) : (
-                <div className="prose prose-sm max-w-none rounded-md border bg-muted/30 p-4" dangerouslySetInnerHTML={{ __html: doc.body }} />
+                <article className="mx-auto min-h-[680px] max-w-[760px] border border-border/80 bg-card px-8 py-10 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:px-12">
+                  <div className="mb-8 border-b border-border pb-5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                      Document record
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight">{doc.subject}</h2>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {doc.refId ?? `Document ${doc.id.slice(0, 8)}`} · {owner?.name}
+                    </p>
+                  </div>
+                  <div
+                    className="prose prose-sm max-w-none [&_p]:my-3"
+                    dangerouslySetInnerHTML={{ __html: doc.body }}
+                  />
+                </article>
               )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Attachments</CardTitle></CardHeader>
-            <CardContent><AttachmentList attachments={doc.attachments} onPreview={(a) => previewAttachment(a.id)} /></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Approval trail</CardTitle>
-              <Button variant="outline" size="sm" onClick={exportAuditTrail}>Export JSON</Button>
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="border-b py-3">
+              <CardTitle className="text-sm">Supporting files</CardTitle>
             </CardHeader>
-            <CardContent><ApprovalTrail steps={doc.steps} currentStepId={doc.currentStepId} /></CardContent>
+            <CardContent>
+              <AttachmentList
+                attachments={doc.attachments}
+                onPreview={(a) => previewAttachment(a.id)}
+              />
+            </CardContent>
           </Card>
         </div>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Details</CardTitle></CardHeader>
+        <aside className="min-w-0 space-y-4">
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="border-b py-3">
+              <CardTitle className="text-sm">Record details</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <Row label="Workflow" value={workflow?.name} />
-              <Row label="Type" value={workflow?.type === "financial" ? "Financial" : "Non-financial"} />
+              <Row
+                label="Type"
+                value={workflow?.type === "financial" ? "Financial" : "Non-financial"}
+              />
               <Row label="Version" value={`v${doc.revisionNumber ?? 1}`} mono />
               {showEditor ? (
                 <>
                   <div className="space-y-1.5 pt-1">
                     <Label>Amount</Label>
-                    <Input value={editAmount} onChange={(e) => setEditAmount(e.target.value)} placeholder="Optional" />
+                    <Input
+                      value={editAmount}
+                      onChange={(e) => setEditAmount(e.target.value)}
+                      placeholder="Optional"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Priority</Label>
-                    <Select value={editPriority} onValueChange={(v) => setEditPriority(v as Priority)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select
+                      value={editPriority}
+                      onValueChange={(v) => setEditPriority(v as Priority)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Normal">Normal</SelectItem>
                         <SelectItem value="Urgent">Urgent</SelectItem>
@@ -463,36 +561,94 @@ function DetailPage() {
             </CardContent>
           </Card>
 
-          {showEditor && (
-            <>
-              <Button className="w-full" disabled={saving || !editSubject.trim()} onClick={() => setConfirmResubmit(true)}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                Resubmit for approval
+          <Card className="border-border/70 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between border-b py-3">
+              <CardTitle className="text-sm">Workflow &amp; review activity</CardTitle>
+              <Button variant="ghost" size="sm" onClick={exportAuditTrail}>
+                Export JSON
               </Button>
-              <Button variant="outline" className="w-full" disabled={saving || !editSubject.trim()} onClick={() => void saveDocument(false)}>
-                Save without submitting
+            </CardHeader>
+            <CardContent className="space-y-6 pt-5">
+              <WorkflowStepper steps={doc.steps} currentStepId={doc.currentStepId} compact />
+              <CommentThread
+                comments={doc.steps
+                  .filter((step) => step.comment && step.actedAt)
+                  .map((step) => ({
+                    id: step.id,
+                    author:
+                      users.find((candidate) => candidate.id === step.approverId)?.name ??
+                      "Approver",
+                    role: users.find((candidate) => candidate.id === step.approverId)?.designation,
+                    timestamp: step.actedAt!,
+                    body: step.comment!,
+                    action:
+                      step.status === "approved"
+                        ? ("approved" as const)
+                        : step.status === "rejected"
+                          ? ("rejected" as const)
+                          : step.status === "returned"
+                            ? ("returned" as const)
+                            : ("comment" as const),
+                    attachmentName: step.attachmentName,
+                  }))}
+              />
+              <ApprovalTrail steps={doc.steps} currentStepId={doc.currentStepId} />
+            </CardContent>
+          </Card>
+
+          <div className="sticky top-28 space-y-2 rounded-xl border border-border/70 bg-card p-3 shadow-sm">
+            {showEditor && (
+              <>
+                <Button
+                  className="w-full"
+                  disabled={saving || !editSubject.trim()}
+                  onClick={() => setConfirmResubmit(true)}
+                >
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  Resubmit for approval
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={saving || !editSubject.trim()}
+                  onClick={() => void saveDocument(false)}
+                >
+                  Save without submitting
+                </Button>
+              </>
+            )}
+
+            {canFinalize && !showEditor && (
+              <Button className="w-full" onClick={() => setFinalize(true)}>
+                <Hash className="mr-2 h-4 w-4" /> Finalize document
               </Button>
-            </>
-          )}
+            )}
 
-          {canFinalize && !showEditor && (
-            <Button className="w-full" onClick={() => setFinalize(true)}>
-              <Hash className="mr-2 h-4 w-4" /> Finalize document
-            </Button>
-          )}
+            {canCancel && !showEditor && (
+              <Button
+                variant="outline"
+                className="w-full text-destructive hover:text-destructive"
+                onClick={() => setCancel(true)}
+              >
+                <XCircle className="mr-2 h-4 w-4" /> Cancel document
+              </Button>
+            )}
 
-          {canCancel && !showEditor && (
-            <Button variant="outline" className="w-full text-destructive hover:text-destructive" onClick={() => setCancel(true)}>
-              <XCircle className="mr-2 h-4 w-4" /> Cancel document
-            </Button>
-          )}
-
-          {canDelete && !showEditor && (
-            <Button variant="outline" className="w-full text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="mr-2 h-4 w-4" /> Delete document
-            </Button>
-          )}
-        </div>
+            {canDelete && !showEditor && (
+              <Button
+                variant="outline"
+                className="w-full text-destructive hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Delete document
+              </Button>
+            )}
+          </div>
+        </aside>
       </div>
 
       <ConfirmDialog

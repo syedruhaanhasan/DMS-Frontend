@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PageHeader } from "@/components/wdas/page-header";
 import { wdas } from "@/services/wdas";
 import { useSession } from "@/lib/wdas/role-context";
 import { useCanFetchDocuments } from "@/lib/wdas/use-document-query";
@@ -9,13 +8,27 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { DocumentTable } from "@/components/wdas/document-table";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
-import { FilePlus, FileText } from "lucide-react";
+import { useMemo, useState } from "react";
+import { FilePlus, FileText, Layers3 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { DocStatus } from "@/lib/wdas/types";
 
 export const Route = createFileRoute("/documents/")({
   component: MyDocs,
 });
 
+type DocumentTab = "drafts" | "inApproval" | "approved" | "rejected" | "returned";
+
+const DOCUMENT_TABS: { id: DocumentTab; label: string; statuses: DocStatus[] }[] = [
+  { id: "drafts", label: "Drafts", statuses: ["draft"] },
+  { id: "inApproval", label: "In Approval", statuses: ["pending", "ready_to_finalize"] },
+  { id: "approved", label: "Approved", statuses: ["approved"] },
+  { id: "rejected", label: "Rejected", statuses: ["rejected"] },
+  { id: "returned", label: "Returned", statuses: ["returned"] },
+];
+
 function MyDocs() {
+  const [activeTab, setActiveTab] = useState<DocumentTab>("drafts");
   const { user } = useSession();
   const canFetch = useCanFetchDocuments();
   const q = useQuery({
@@ -24,27 +37,119 @@ function MyDocs() {
     enabled: canFetch && !!user.id,
   });
 
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(
+        DOCUMENT_TABS.map((tab) => [
+          tab.id,
+          (q.data ?? []).filter((doc) => tab.statuses.includes(doc.status)).length,
+        ]),
+      ) as Record<DocumentTab, number>,
+    [q.data],
+  );
+
+  const filtered = useMemo(() => {
+    const tab = DOCUMENT_TABS.find((item) => item.id === activeTab)!;
+    return (q.data ?? []).filter((doc) => tab.statuses.includes(doc.status));
+  }, [activeTab, q.data]);
+
+  const activeLabel = DOCUMENT_TABS.find((tab) => tab.id === activeTab)!.label;
+
   return (
-    <div>
-      <PageHeader
-        title="My Documents"
-        subtitle="Documents you have created."
-        actions={
-          <Button asChild><Link to="/documents/new"><FilePlus className="mr-2 h-4 w-4" /> New document</Link></Button>
-        }
-      />
-      <div className="p-6">
-        <Card>
+    <div className="min-h-full bg-slate-50/60">
+      <div className="relative overflow-hidden border-b border-slate-800 bg-slate-950 px-6 py-7 text-white sm:px-8">
+        <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-amber-400/10 blur-3xl" />
+        <div className="relative mx-auto flex max-w-7xl flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400">
+              <Layers3 className="h-3.5 w-3.5" />
+              Personal workspace
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">My Documents</h1>
+            <p className="mt-1.5 text-sm text-slate-400">
+              Create, track, and manage your document workflow.
+            </p>
+          </div>
+          <Button
+            asChild
+            className="border border-amber-300 bg-amber-400 text-slate-950 shadow-lg shadow-amber-950/20 hover:bg-amber-300"
+          >
+            <Link to="/documents/new">
+              <FilePlus className="mr-2 h-4 w-4" /> New document
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl space-y-5 p-6 sm:p-8">
+        <nav
+          className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm"
+          aria-label="Document status"
+        >
+          {DOCUMENT_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex min-w-fit flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-amber-50 hover:text-slate-950",
+              )}
+            >
+              {tab.label}
+              <span
+                className={cn(
+                  "min-w-6 rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold",
+                  activeTab === tab.id
+                    ? "bg-amber-400 text-slate-950"
+                    : "bg-slate-100 text-slate-500",
+                )}
+              >
+                {counts[tab.id]}
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-4">
+            <div>
+              <h2 className="font-semibold text-slate-950">{activeLabel}</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {counts[activeTab]} {counts[activeTab] === 1 ? "document" : "documents"}
+              </p>
+            </div>
+            <span className="h-1.5 w-12 rounded-full bg-amber-400" />
+          </div>
           <CardContent className="p-0">
-            {q.isFetching && !q.data ? <LoadingState /> :
-              q.isError ? <ErrorState message="Could not load documents." onRetry={() => q.refetch()} /> :
-              !q.data?.length ? <EmptyState
+            {q.isFetching && !q.data ? (
+              <LoadingState />
+            ) : q.isError ? (
+              <ErrorState message="Could not load documents." onRetry={() => q.refetch()} />
+            ) : !q.data?.length ? (
+              <EmptyState
                 icon={<FileText className="h-8 w-8" />}
                 title="No documents yet"
                 description="Start by creating your first document."
-                action={<Button asChild><Link to="/documents/new"><FilePlus className="mr-2 h-4 w-4" /> New document</Link></Button>}
-              /> :
-              <DocumentTable docs={q.data} showStatus />}
+                action={
+                  <Button asChild className="bg-amber-400 text-slate-950 hover:bg-amber-300">
+                    <Link to="/documents/new">
+                      <FilePlus className="mr-2 h-4 w-4" /> New document
+                    </Link>
+                  </Button>
+                }
+              />
+            ) : !filtered.length ? (
+              <EmptyState
+                icon={<FileText className="h-8 w-8" />}
+                title={`No ${activeLabel.toLowerCase()} documents`}
+                description="Documents in this stage will appear here."
+              />
+            ) : (
+              <DocumentTable docs={filtered} showStatus />
+            )}
           </CardContent>
         </Card>
       </div>
