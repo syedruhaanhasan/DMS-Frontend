@@ -15,6 +15,7 @@ export async function refreshWorkflowViews(
   await Promise.all([
     qc.invalidateQueries({ queryKey: ["docs"], refetchType: "active" }),
     qc.invalidateQueries({ queryKey: ["dashboard", "me", userId], refetchType: "active" }),
+    qc.invalidateQueries({ queryKey: ["docs", "review"], refetchType: "active" }),
     document
       ? qc.invalidateQueries({ queryKey: ["doc", document.id], refetchType: "active" })
       : Promise.resolve(),

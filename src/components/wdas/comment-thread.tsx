@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 import { absTime } from "@/lib/wdas/format";
-import { Check, X, RotateCcw, Send, MessageSquare } from "lucide-react";
+import { Check, X, RotateCcw, Send, MessageSquare, Eye } from "lucide-react";
 
-export type CommentAction = "submitted" | "approved" | "rejected" | "returned" | "comment";
+export type CommentAction = "submitted" | "approved" | "rejected" | "returned" | "comment" | "review";
 
 export interface CommentEntry {
   id: string;
@@ -20,6 +20,7 @@ const ACTION_META: Record<CommentAction, { icon: typeof Check; color: string; la
   rejected: { icon: X, color: "text-destructive", label: "Rejected" },
   returned: { icon: RotateCcw, color: "text-warning", label: "Returned" },
   comment: { icon: MessageSquare, color: "text-muted-foreground", label: "Comment" },
+  review: { icon: Eye, color: "text-violet-600", label: "Review complete" },
 };
 
 interface Props {

@@ -33,7 +33,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
-import { DEPARTMENTS, type DocStatus, type Department } from "@/lib/wdas/types";
+import { DEPARTMENTS, REPOSITORY_DOC_STATUSES, type DocStatus, type Department } from "@/lib/wdas/types";
 import { useUsers } from "@/lib/wdas/users-context";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -86,8 +86,8 @@ function Repository() {
   const { user } = useSession();
   const canFetch = useCanFetchDocuments();
   const q = useQuery({
-    queryKey: ["docs", "all"],
-    queryFn: () => wdas.listDocuments(),
+    queryKey: ["docs", "repository"],
+    queryFn: () => wdas.listRepositoryDocuments(),
     enabled: canFetch,
   });
 
@@ -139,6 +139,7 @@ function Repository() {
   const filtered = useMemo(() => {
     if (!q.data) return [];
     return q.data.filter((d) => {
+      if (!REPOSITORY_DOC_STATUSES.includes(d.status)) return false;
       if (f.docId && !(d.refId ?? d.id).toLowerCase().includes(f.docId.toLowerCase())) return false;
       if (f.subject && !d.subject.toLowerCase().includes(f.subject.toLowerCase())) return false;
       if (f.ownerId !== "all" && d.ownerId !== f.ownerId) return false;
@@ -211,7 +212,7 @@ function Repository() {
                 Document Repository
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                A governed record of documents across every department and workflow.
+                Approved, rejected, and cancelled documents with a completed workflow.
               </p>
             </div>
             <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 p-1">
@@ -392,12 +393,9 @@ function Repository() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="ready_to_finalize">Ready to finalize</SelectItem>
                         <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="ready_to_finalize">Ready to finalize</SelectItem>
                         <SelectItem value="rejected">Rejected</SelectItem>
-                        <SelectItem value="returned">Returned</SelectItem>
                         <SelectItem value="cancelled">Cancelled</SelectItem>
                       </SelectContent>
                     </Select>

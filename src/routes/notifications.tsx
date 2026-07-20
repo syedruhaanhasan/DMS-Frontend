@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bell, FileText, Clock, XCircle, RotateCcw, Ban, CheckCircle2, AlertTriangle, Search } from "lucide-react";
+import { Bell, FileText, Clock, XCircle, RotateCcw, Ban, CheckCircle2, AlertTriangle, Search, Eye } from "lucide-react";
 import { EmptyState } from "@/components/wdas/data-states";
 import { cn } from "@/lib/utils";
 import { relTime, absTime } from "@/lib/wdas/format";
@@ -25,6 +25,9 @@ const ICONS: Record<NotificationType, { icon: typeof Bell; color: string; label:
   returned: { icon: RotateCcw, color: "text-warning", label: "Returned" },
   cancelled: { icon: Ban, color: "text-muted-foreground", label: "Cancelled" },
   finalized: { icon: CheckCircle2, color: "text-success", label: "Finalized" },
+  approval_recorded: { icon: CheckCircle2, color: "text-success", label: "Approval update" },
+  reviewer_added: { icon: Eye, color: "text-info", label: "Added as reviewer" },
+  system: { icon: Bell, color: "text-muted-foreground", label: "System" },
 };
 
 function NotificationsPage() {
@@ -87,8 +90,10 @@ function NotificationsPage() {
             ) : (
               <ul className="divide-y">
                 {filtered.map((n) => {
-                  const { icon: Icon, color, label } = ICONS[n.type];
-                  const to = role === "approver" && n.type === "new_request" ? "/documents/$id/review" : "/documents/$id";
+                  const { icon: Icon, color, label } = ICONS[n.type] ?? ICONS.system;
+                  const to = n.type === "reviewer_added" || (role === "approver" && n.type === "new_request")
+                    ? "/documents/$id/review"
+                    : "/documents/$id";
                   return (
                     <li key={n.id}>
                       <Link

@@ -229,8 +229,8 @@ function WorkflowDetail() {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="sequential">Sequential â€” approvers act one after another</SelectItem>
-                    <SelectItem value="parallel">Parallel â€” all approvers act at the same time</SelectItem>
+                    <SelectItem value="sequential">Sequential, approvers act one after another</SelectItem>
+                    <SelectItem value="parallel">Parallel, all approvers act at the same time</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

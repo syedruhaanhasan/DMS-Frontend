@@ -7,9 +7,11 @@ import type {
   ApiExternalApproverListItemDto,
   ApiExternalApproverSessionDto,
   ApiMatrixTierDto,
+  ApiApprovalMode,
   ApiSyncResultDto,
   ApiUserSummaryDto,
   ApiWorkflowDto,
+  ApiWorkflowRoutingDto,
   ApiWorkflowVersionSummaryDto,
 } from "@/lib/api/types";
 import { mapUser, mapWorkflow } from "@/lib/api/mappers";
@@ -23,7 +25,6 @@ import type {
   Workflow,
   DocumentTypeCatalogItem,
 } from "@/lib/wdas/types";
-import type { ApiApprovalMode } from "@/lib/api/types";
 
 type ApiDepartment = { id: string; name: string; code: string; parentDepartmentId: string | null; isActive: boolean };
 
@@ -168,6 +169,57 @@ function buildMatrixPayload(w: Workflow) {
       approverUserIds,
     };
   });
+}
+
+function mapApiApprovalMode(mode: ApiApprovalMode): ApprovalMode {
+  switch (mode) {
+    case "Matrix":
+      return "matrix";
+    case "Group":
+      return "user";
+    case "AdHoc":
+      return "adhoc";
+    case "Hybrid":
+      return "hybrid";
+    default:
+      return "user";
+  }
+}
+
+function mapWorkflowRouting(dto: ApiWorkflowRoutingDto): Pick<Workflow, "id" | "mode" | "approvalSequence" | "approverUserIds" | "groups" | "matrixBands"> {
+  const mode = mapApiApprovalMode(dto.approvalMode);
+  const mappedGroups = dto.groups.map((g) => ({
+    id: g.id,
+    name: g.name,
+    memberIds: g.memberUserIds ?? [],
+    rule: (g.requirement === "AnyOneMember" ? "any" : "all") as import("@/lib/wdas/types").ApproverGroup["rule"],
+  }));
+  const memberIds = mappedGroups.flatMap((g) => g.memberIds);
+  let approverUserIds = dto.approverUserIds?.length ? dto.approverUserIds : memberIds;
+  const matrixBands = dto.matrixTiers.map((t) => ({
+    id: t.id,
+    min: Number(t.minAmount),
+    max: t.maxAmount != null ? Number(t.maxAmount) : null,
+    approverUserIds: [...(t.approverUserIds ?? [])],
+    approverGroupIds: mappedGroups
+      .filter((g) => g.memberIds.some((uid) => (t.approverUserIds ?? []).includes(uid)))
+      .map((g) => g.id),
+    sequence: "sequential" as const,
+  }));
+  if (!approverUserIds.length && matrixBands.length) {
+    approverUserIds = matrixBands.flatMap((b) => b.approverUserIds ?? []);
+  }
+  if (memberIds.length > 0 && (mode === "adhoc" || mode === "user")) {
+    approverUserIds = memberIds;
+  }
+  return {
+    id: dto.id,
+    mode,
+    approvalSequence: dto.approvalSequence === "Parallel" ? "parallel" : "sequential",
+    approverUserIds,
+    groups: mappedGroups,
+    matrixBands,
+  };
 }
 
 function findWorkflowDuplicate(
@@ -463,6 +515,11 @@ export const wdasConfig = {
     if (!department || department === "all") return mapped;
 
     return mapped.filter((w) => !w.department || w.department === department);
+  },
+
+  getWorkflowRouting: async (id: string) => {
+    const dto = await api.get<ApiWorkflowRoutingDto>(`/api/workflows/${id}/routing`);
+    return mapWorkflowRouting(dto);
   },
 
   getWorkflow: async (id: string): Promise<Workflow> => {

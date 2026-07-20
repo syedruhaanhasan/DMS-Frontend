@@ -55,6 +55,7 @@ function ReviewPage() {
   const [reviewerQuery, setReviewerQuery] = useState("");
   const [reviewerFocused, setReviewerFocused] = useState(false);
   const [addingReviewer, setAddingReviewer] = useState(false);
+  const [completingReview, setCompletingReview] = useState(false);
 
   useEffect(() => {
     if (q.data && user.id && q.data.ownerId === user.id) {
@@ -71,11 +72,56 @@ function ReviewPage() {
 
   const doc = q.data;
   const currentStep = doc.steps.find((s) => s.id === doc.currentStepId);
+  const reviewers = doc.reviewers ?? [];
+  const myReviewerRecord = reviewers.find((r) => r.userId === user.id);
+  const isReviewer = Boolean(myReviewerRecord);
+  const isGatedReview =
+    doc.status === "pending_reviewer" && isReviewer && !myReviewerRecord?.reviewedAt;
+  const isApproverGatedReview =
+    isGatedReview &&
+    Boolean(myReviewerRecord?.addedById && myReviewerRecord.addedById !== doc.ownerId);
   const isYourTurn =
     currentStep?.approverId === user.id &&
     (doc.status === "pending" || doc.status === "ready_to_finalize");
-
-  const reviewers = doc.reviewers ?? [];
+  const awaitingReviewerIAdded = (doc.reviewers ?? []).some(
+    (r) => r.addedById === user.id && !r.reviewedAt,
+  );
+  const waitingForMyReviewer = doc.status === "pending_reviewer" && awaitingReviewerIAdded;
+  const reviewerFeedbackForMe = (doc.reviewers ?? []).filter(
+    (r) => r.addedById === user.id && r.reviewComment?.trim() && r.reviewedAt,
+  );
+  const activityComments = [
+    ...(doc.reviewers ?? [])
+      .filter((r) => r.reviewComment?.trim() && r.reviewedAt)
+      .map((r) => ({
+        id: `reviewer-${r.id}`,
+        author: users.find((u) => u.id === r.userId)?.name ?? r.name,
+        role: "Reviewer",
+        timestamp: r.reviewedAt!,
+        body: r.reviewComment!,
+        action: "review" as const,
+      })),
+    ...doc.steps
+      .filter((s) => s.comment && s.actedAt)
+      .map((s) => ({
+        id: s.id,
+        author: users.find((u) => u.id === s.approverId)?.name ?? "Approver",
+        role: users.find((u) => u.id === s.approverId)?.designation,
+        timestamp: s.actedAt!,
+        body: s.comment!,
+        action:
+          s.status === "approved"
+            ? ("approved" as const)
+            : s.status === "rejected"
+              ? ("rejected" as const)
+              : s.status === "returned"
+                ? ("returned" as const)
+                : ("comment" as const),
+        attachmentName: s.attachmentName,
+      })),
+  ];
+  const canComment = isYourTurn || isGatedReview;
+  const reviewerOnly = isGatedReview || (isReviewer && !isYourTurn);
   const alreadyAddedByMe = reviewers.some((r) => r.addedById === user.id);
   const canAddReviewer = isYourTurn && !alreadyAddedByMe;
   const reviewerCandidates = users.filter((u) => {
@@ -105,9 +151,36 @@ function ReviewPage() {
     }
   };
 
+  const completeReview = async () => {
+    if (!comment.trim()) {
+      toast.error("Enter your review notes before completing");
+      return;
+    }
+    setCompletingReview(true);
+    try {
+      const updated = await wdas.completeReviewerReview(doc.id, comment);
+      await refreshWorkflowViews(qc, { userId: user.id, document: updated });
+      setComment("");
+      toast.success(
+        updated.status === "pending"
+          ? "Review completed — document returned to approver"
+          : "Review completed — document returned to creator",
+      );
+      router.navigate({ to: "/inbox" });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setCompletingReview(false);
+    }
+  };
+
   const saveComment = async () => {
     if (!comment.trim()) {
       toast.error("Enter a comment");
+      return;
+    }
+    if (isGatedReview) {
+      await completeReview();
       return;
     }
     try {
@@ -128,7 +201,7 @@ function ReviewPage() {
       await q.refetch();
       setReviewerQuery("");
       setReviewerFocused(false);
-      toast.success("Reviewer added");
+      toast.success("Reviewer added — they will review first, then the document returns to you");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -159,8 +232,8 @@ function ReviewPage() {
       <div className="sticky top-0 z-20 border-b border-border/70 bg-card/95 px-6 py-3 shadow-sm backdrop-blur">
         <div className="mb-3 flex items-center gap-2 text-sm">
           <Button asChild variant="ghost" size="sm" className="-ml-2 h-7 gap-1">
-            <Link to="/inbox">
-              <ArrowLeft className="h-4 w-4" /> Approval Box
+            <Link to={reviewerOnly ? "/inbox" : "/inbox"}>
+              <ArrowLeft className="h-4 w-4" /> {reviewerOnly ? "Back to inbox" : "Approval Box"}
             </Link>
           </Button>
         </div>
@@ -192,6 +265,24 @@ function ReviewPage() {
           </div>
         </div>
       </div>
+
+      {waitingForMyReviewer && (
+        <div className="mx-6 rounded-md border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-950 dark:text-violet-100">
+          Waiting for your reviewer to finish. You can approve or reject once they complete their review.
+        </div>
+      )}
+
+      {isYourTurn && reviewerFeedbackForMe.length > 0 && (
+        <div className="mx-6 space-y-2 rounded-md border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <p className="font-medium">Reviewer feedback</p>
+          {reviewerFeedbackForMe.map((r) => (
+            <div key={r.id} className="rounded-md border border-border/70 bg-background/80 px-3 py-2">
+              <p className="text-xs font-medium text-muted-foreground">{r.name}</p>
+              <p className="mt-1 whitespace-pre-wrap">{r.reviewComment}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-5 p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">
         <div className="min-w-0 space-y-4">
@@ -267,7 +358,7 @@ function ReviewPage() {
                 <Eye className="h-4 w-4 text-muted-foreground" /> Reviewers
               </CardTitle>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Informational recipients — they can view the document but do not approve or reject it.
+                When you add a reviewer, they review first — then the document returns to you to approve.
               </p>
             </CardHeader>
             <CardContent className="space-y-3 pt-4">
@@ -354,26 +445,7 @@ function ReviewPage() {
               <CardTitle className="text-sm">Review activity</CardTitle>
             </CardHeader>
             <CardContent className="max-h-[340px] space-y-6 overflow-y-auto pt-4">
-              <CommentThread
-                comments={doc.steps
-                  .filter((s) => s.comment && s.actedAt)
-                  .map((s) => ({
-                    id: s.id,
-                    author: users.find((u) => u.id === s.approverId)?.name ?? "Approver",
-                    role: users.find((u) => u.id === s.approverId)?.designation,
-                    timestamp: s.actedAt!,
-                    body: s.comment!,
-                    action:
-                      s.status === "approved"
-                        ? ("approved" as const)
-                        : s.status === "rejected"
-                          ? ("rejected" as const)
-                          : s.status === "returned"
-                            ? ("returned" as const)
-                            : ("comment" as const),
-                    attachmentName: s.attachmentName,
-                  }))}
-              />
+              <CommentThread comments={activityComments} />
               <ApprovalTrail steps={doc.steps} currentStepId={doc.currentStepId} />
             </CardContent>
           </Card>
@@ -382,11 +454,24 @@ function ReviewPage() {
             <Card className="border-primary/20 shadow-md">
               <CardHeader className="border-b bg-primary/[0.045] py-3">
                 <CardTitle className="text-sm">
-                  {isYourTurn ? "Approval decision" : "Actions unavailable"}
+                  {reviewerOnly
+                    ? "Your review"
+                    : isYourTurn
+                      ? "Approval decision"
+                      : "Actions unavailable"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {!isYourTurn && (
+                {reviewerOnly && (
+                  <p className="rounded-md bg-info/10 p-3 text-xs text-muted-foreground">
+                    {isGatedReview
+                      ? isApproverGatedReview
+                        ? "Complete your review to return this document to the approver who requested it."
+                        : "Complete your review to return this document to the creator. It will only go to the approver after the creator sends it for approval."
+                      : "You were added as an informational reviewer. You can read the document and leave comments — approval is handled by the assigned approvers."}
+                  </p>
+                )}
+                {!isYourTurn && !reviewerOnly && (
                   <p className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
                     {doc.status !== "pending"
                       ? "This document is no longer awaiting action."
@@ -398,56 +483,71 @@ function ReviewPage() {
                   <Textarea
                     id="cmt"
                     rows={4}
-                    placeholder="Add your notes…"
+                    placeholder={reviewerOnly ? "Add your review notes…" : "Add your notes…"}
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    disabled={!isYourTurn}
+                    disabled={!canComment}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Attachment (optional)</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start gap-2"
-                    disabled={!isYourTurn}
-                  >
-                    <Paperclip className="h-4 w-4" /> Attach file
-                  </Button>
-                </div>
+                {!reviewerOnly && (
+                  <div className="space-y-2">
+                    <Label>Attachment (optional)</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-2"
+                      disabled={!isYourTurn}
+                    >
+                      <Paperclip className="h-4 w-4" /> Attach file
+                    </Button>
+                  </div>
+                )}
                 <div className="grid gap-2 pt-2">
-                  <Button
-                    onClick={() => setConfirm("approve")}
-                    disabled={!isYourTurn}
-                    className="h-11 text-sm font-semibold"
-                  >
-                    <Check className="mr-2 h-4 w-4" /> Approve document
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={saveComment}
-                    disabled={!isYourTurn || !comment.trim()}
-                  >
-                    Save comment only
-                  </Button>
-                  <Button
-                    onClick={() => setConfirm("return")}
-                    disabled={!isYourTurn}
-                    variant="ghost"
-                    className="text-warning-foreground hover:bg-warning/10"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" /> Return for Correction
-                  </Button>
-                  <Button
-                    onClick={() => setConfirm("reject")}
-                    disabled={!isYourTurn}
-                    variant="ghost"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <X className="mr-2 h-4 w-4" /> Reject
-                  </Button>
+                  {reviewerOnly ? (
+                    <Button
+                      type="button"
+                      onClick={() => void completeReview()}
+                      disabled={!comment.trim() || completingReview}
+                      className="h-11 text-sm font-semibold"
+                    >
+                      {completingReview ? "Completing…" : "Complete review"}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => setConfirm("approve")}
+                        disabled={!isYourTurn}
+                        className="h-11 text-sm font-semibold"
+                      >
+                        <Check className="mr-2 h-4 w-4" /> Approve document
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={saveComment}
+                        disabled={!isYourTurn || !comment.trim()}
+                      >
+                        Save comment only
+                      </Button>
+                      <Button
+                        onClick={() => setConfirm("return")}
+                        disabled={!isYourTurn}
+                        variant="ghost"
+                        className="text-warning-foreground hover:bg-warning/10"
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" /> Return for Correction
+                      </Button>
+                      <Button
+                        onClick={() => setConfirm("reject")}
+                        disabled={!isYourTurn}
+                        variant="ghost"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <X className="mr-2 h-4 w-4" /> Reject
+                      </Button>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>

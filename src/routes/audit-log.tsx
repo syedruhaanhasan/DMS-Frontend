@@ -13,6 +13,7 @@ import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-sta
 import { ShieldCheck, ShieldAlert, ScrollText, Download, Search } from "lucide-react";
 import { toast } from "sonner";
 import type { ApiAuditLogEntryDto } from "@/lib/api/types";
+import { formatAuditDetails, auditDetailsSearchText } from "@/lib/wdas/audit-details";
 
 export const Route = createFileRoute("/audit-log")({
   component: AuditLogPage,
@@ -55,7 +56,7 @@ function AuditLogPage() {
     if (!term.trim()) return rows;
     const t = term.toLowerCase();
     return rows.filter((e) =>
-      [e.action, e.eventType, e.actorDisplayName, e.documentId, e.ipAddress]
+      [e.action, e.eventType, e.actorDisplayName, e.documentId, e.ipAddress, auditDetailsSearchText(e.detailsJson)]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(t)),
     );
@@ -67,7 +68,7 @@ function AuditLogPage() {
       toast.error("Nothing to export for the selected range.");
       return;
     }
-    const header = ["Seq", "Timestamp", "Actor", "Event", "Action", "Document", "Entity", "IP", "Hash"];
+    const header = ["Seq", "Timestamp", "Actor", "Event", "Action", "Changes", "Document", "Entity", "IP", "Hash"];
     const csv = [
       header.join(","),
       ...rows.map((e: ApiAuditLogEntryDto) =>
@@ -77,6 +78,7 @@ function AuditLogPage() {
           e.actorDisplayName ?? "System",
           e.eventType,
           e.action,
+          formatAuditDetails(e.detailsJson),
           e.documentId ?? "",
           e.entityType ?? "",
           e.ipAddress ?? "",
@@ -174,6 +176,7 @@ function AuditLogPage() {
                       <th className="px-4 py-3 font-medium">Actor</th>
                       <th className="px-4 py-3 font-medium">Event</th>
                       <th className="px-4 py-3 font-medium">Action</th>
+                      <th className="px-4 py-3 font-medium">Changes</th>
                       <th className="px-4 py-3 font-medium">Document</th>
                       <th className="px-4 py-3 font-medium">IP</th>
                       <th className="px-4 py-3 font-medium">Hash</th>
@@ -191,6 +194,9 @@ function AuditLogPage() {
                           <Badge className={`border-transparent ${eventTone(e.eventType)}`}>{e.eventType}</Badge>
                         </td>
                         <td className="max-w-xs truncate px-4 py-3 text-muted-foreground" title={e.action}>{e.action}</td>
+                        <td className="max-w-md px-4 py-3 text-muted-foreground" title={formatAuditDetails(e.detailsJson)}>
+                          {formatAuditDetails(e.detailsJson)}
+                        </td>
                         <td className="px-4 py-3 font-mono text-muted-foreground">{e.documentId ?? "—"}</td>
                         <td className="px-4 py-3 font-mono text-muted-foreground">{e.ipAddress ?? "—"}</td>
                         <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground" title={e.entryHash}>

@@ -10,12 +10,22 @@ export const DEPARTMENTS: Department[] = ["Finance", "HR", "Procurement", "Legal
 
 export type DocStatus =
   | "draft"
+  | "pending_reviewer"
+  | "pending_creator_send"
   | "pending"
   | "ready_to_finalize"
   | "approved"
   | "rejected"
   | "returned"
   | "cancelled";
+
+/** Documents eligible for the enterprise repository (workflow finished). */
+export const REPOSITORY_DOC_STATUSES: DocStatus[] = [
+  "approved",
+  "ready_to_finalize",
+  "rejected",
+  "cancelled",
+];
 
 export type SlaState = "on_time" | "at_risk" | "overdue";
 export type Priority = "Normal" | "Urgent" | "Critical";
@@ -180,6 +190,8 @@ export interface DocumentReviewer {
   userId?: string;
   /** User who added this reviewer (creator at creation, or an approver during approval). */
   addedById?: string;
+  reviewedAt?: string;
+  reviewComment?: string;
 }
 
 /* ============== External approvers & Delegation ============== */

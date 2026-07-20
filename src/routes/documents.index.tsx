@@ -21,7 +21,7 @@ type DocumentTab = "drafts" | "inApproval" | "approved" | "rejected" | "returned
 
 const STATUS_TABS: { id: Exclude<DocumentTab, "forReview">; label: string; statuses: DocStatus[] }[] = [
   { id: "drafts", label: "Drafts", statuses: ["draft"] },
-  { id: "inApproval", label: "In Approval", statuses: ["pending", "ready_to_finalize"] },
+  { id: "inApproval", label: "In Approval", statuses: ["pending", "ready_to_finalize", "pending_reviewer", "pending_creator_send"] },
   { id: "approved", label: "Approved", statuses: ["approved"] },
   { id: "rejected", label: "Rejected", statuses: ["rejected"] },
   { id: "returned", label: "Returned", statuses: ["returned"] },

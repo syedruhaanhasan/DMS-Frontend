@@ -161,12 +161,24 @@ function NewDoc() {
     let cancelled = false;
     void (async () => {
       try {
-        const full = await wdasConfig.getWorkflow(workflowId);
+        const full = await wdasConfig.getWorkflowRouting(workflowId);
         if (cancelled) return;
-        const fromWorkflow =
-          full.approverUserIds?.length
-            ? full.approverUserIds
-            : (full.groups ?? []).flatMap((g) => g.memberIds);
+        // Workflows can store fixed approvers in different places depending on approval mode:
+        // - user/hybrid: `approverUserIds` or `groups.memberIds`
+        // - matrix: approvers live inside the matching `matrixBands[*].approverUserIds`
+        let fromWorkflow: string[] = [];
+        if (full.approverUserIds?.length) {
+          fromWorkflow = full.approverUserIds;
+        } else if (full.groups?.length) {
+          fromWorkflow = full.groups.flatMap((g) => g.memberIds);
+        } else if (full.matrixBands?.length) {
+          const sampleAmount = amountNum ?? 0;
+          const band =
+            full.matrixBands.find(
+              (b) => sampleAmount >= b.min && (b.max === null || sampleAmount <= b.max),
+            ) ?? full.matrixBands.find((b) => (b.approverUserIds?.length ?? 0) > 0) ?? full.matrixBands[0];
+          fromWorkflow = band?.approverUserIds ?? [];
+        }
         const seen = new Set<string>();
         const next = fromWorkflow.filter((id) => {
           if (!id || id === user.id || seen.has(id)) return false;
@@ -181,7 +193,7 @@ function NewDoc() {
       }
     })();
     return () => { cancelled = true; };
-  }, [workflowId, user.id]);
+  }, [workflowId, user.id, amountNum]);
 
   useEffect(() => {
     const el = editorRef.current;
@@ -281,10 +293,17 @@ function NewDoc() {
         attachments,
         directoryUsers: users,
       }, !asDraft, pendingFiles);
-      toast.success(asDraft ? "Draft saved" : "Document submitted");
+      toast.success(
+        asDraft
+          ? "Draft saved"
+          : doc.status === "pending_reviewer"
+            ? "Sent to reviewer — it will go to the approver after you send it for approval"
+            : "Document submitted for approval",
+      );
       // Only refresh document lists — do not invalidate the whole app cache.
       void qc.invalidateQueries({ queryKey: ["docs"] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "me"] });
+      void qc.invalidateQueries({ queryKey: ["docs", "review"] });
       setConfirm(false);
       router.navigate({ to: "/documents/$id", params: { id: doc.id } });
     } catch (e) {
@@ -518,7 +537,7 @@ function NewDoc() {
                 <div className="pt-3">
                   <Label>Reviewer</Label>
                   <p className="text-xs text-muted-foreground">
-                    Optional. You can add one reviewer — they receive the document to review but do not approve or reject it.
+                    Optional. When added, the document goes to the reviewer first. After they complete review it returns to you, then you send it to the approver.
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1 rounded-md border p-2">
                     {reviewerIds.map((id) => {

@@ -192,7 +192,7 @@ function NewWorkflowWizard() {
   };
 
   return (
-    <div className="min-h-full bg-[#080a0d] text-zinc-100">
+    <div className="min-h-full bg-background text-foreground">
       <PageHeader
         title="New workflow"
         subtitle="Configure the routing, approval mode, SLA and notifications for a new document type."
@@ -200,17 +200,17 @@ function NewWorkflowWizard() {
       />
       <div className="relative space-y-5 overflow-hidden p-6 lg:p-8">
         <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(245,158,11,.13)_1px,transparent_1px),linear-gradient(90deg,rgba(245,158,11,.13)_1px,transparent_1px)] [background-size:32px_32px]" />
-        <div className="relative flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/25 bg-zinc-950/90 p-4 shadow-2xl">
+        <div className="relative flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/25 bg-card dark:bg-zinc-950/90 p-4 shadow-2xl">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-400 text-zinc-950"><WorkflowIcon className="h-5 w-5" /></span>
-            <div><p className="font-semibold">Workflow canvas</p><p className="text-xs text-zinc-500">Build a governed approval route from start to publish.</p></div>
+            <div><p className="font-semibold">Workflow canvas</p><p className="text-xs text-muted-foreground">Build a governed approval route from start to publish.</p></div>
           </div>
           <div className="flex items-center gap-2 text-xs text-amber-300"><Sparkles className="h-3.5 w-3.5" /> Draft autosaved locally</div>
         </div>
-        <Stepper steps={STEPS} current={step} onStepClick={(i) => i <= step && setStep(i)} className="relative [&_button]:border-zinc-700 [&_button]:bg-zinc-900 [&_button]:text-zinc-200 [&_li>span]:bg-amber-400/30" />
+        <Stepper steps={STEPS} current={step} onStepClick={(i) => i <= step && setStep(i)} className="relative [&_li>span]:bg-amber-400/30" />
 
-        <Card className="relative border-zinc-700 bg-zinc-950/95 text-zinc-100 shadow-2xl [&_.bg-card]:bg-zinc-950 [&_.border-border]:border-zinc-700 [&_input]:border-zinc-700 [&_input]:bg-zinc-900 [&_input]:text-zinc-100 [&_button[role=combobox]]:border-zinc-700 [&_button[role=combobox]]:bg-zinc-900">
-          <CardHeader className="border-b border-zinc-800"><p className="text-xs font-semibold uppercase tracking-[.2em] text-amber-400">Step {step + 1} of {STEPS.length}</p><CardTitle className="text-lg">{STEPS[step]}</CardTitle></CardHeader>
+        <Card className="relative shadow-2xl">
+          <CardHeader className="border-b border-border"><p className="text-xs font-semibold uppercase tracking-[.2em] text-amber-400">Step {step + 1} of {STEPS.length}</p><CardTitle className="text-lg">{STEPS[step]}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {step === 0 && (
               <BasicInfoStep
@@ -230,7 +230,7 @@ function NewWorkflowWizard() {
         </Card>
 
         <div className="relative flex items-center justify-between">
-          <Button variant="outline" className="border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-800" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
+          <Button variant="outline" className="hover:bg-muted" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>
             <ChevronLeft className="mr-1 h-4 w-4" /> Back
           </Button>
           {step < STEPS.length - 1 ? (
@@ -331,8 +331,8 @@ function BasicInfoStep({
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="sequential">Sequential â€” approvers act one after another</SelectItem>
-            <SelectItem value="parallel">Parallel â€” all approvers act at the same time</SelectItem>
+            <SelectItem value="sequential">Sequential, approvers act one after another</SelectItem>
+            <SelectItem value="parallel">Parallel, all approvers act at the same time</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -351,9 +351,25 @@ function BasicInfoStep({
 function DefaultToStep({ wf, setWf }: { wf: Partial<Workflow>; setWf: (v: Partial<Workflow>) => void }) {
   const { users } = useUsers();
   const on = new Set(wf.defaultToIds ?? []);
+  const allSelected = users.length > 0 && users.every((u) => on.has(u.id));
+
+  const toggleAll = () => {
+    setWf({
+      ...wf,
+      defaultToIds: allSelected ? [] : users.map((u) => u.id),
+    });
+  };
+
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">Optional. Pre-select recipients so Makers don't have to choose the "To" group every time.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Optional. Pre-select recipients so Makers don't have to choose the "To" group every time.</p>
+        {users.length > 0 && (
+          <Button type="button" variant="outline" size="sm" onClick={toggleAll}>
+            {allSelected ? "Deselect all" : "Select all"}
+          </Button>
+        )}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {users.map((u) => {
           const active = on.has(u.id);

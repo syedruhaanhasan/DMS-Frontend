@@ -6,7 +6,7 @@ import { useSession } from "@/lib/wdas/role-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { DocumentTable } from "@/components/wdas/document-table";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
-import { AlertTriangle, Clock3, Inbox, ListFilter, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock3, Eye, Inbox, ListFilter, ShieldCheck } from "lucide-react";
 import { DelegationBanner } from "@/components/wdas/delegation-banner";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
@@ -25,6 +25,11 @@ function InboxPage() {
   const q = useQuery({
     queryKey: ["docs", "approver", user.id],
     queryFn: () => wdas.listDocuments({ approverId: user.id }),
+    enabled: canFetch && !!user.id,
+  });
+  const reviewQ = useQuery({
+    queryKey: ["docs", "review", user.id],
+    queryFn: () => wdas.listReviewDocuments(),
     enabled: canFetch && !!user.id,
   });
   const [confirm, setConfirm] = useState<{
@@ -87,10 +92,38 @@ function InboxPage() {
     <div className="min-h-full bg-muted/20">
       <PageHeader
         title="Approval Box"
-        subtitle="Review and action your assigned documents in received order."
+        subtitle="Documents awaiting your approval, plus any shared with you for informational review."
       />
       <DelegationBanner />
       <div className="space-y-4 p-6">
+        {(reviewQ.data?.length ?? 0) > 0 && (
+          <Card className="overflow-hidden border-info/30 shadow-sm">
+            <div className="flex flex-col gap-1 border-b border-info/20 bg-info/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                  <Eye className="h-4 w-4 text-info" />
+                  For your review
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Documents awaiting your approval, plus any waiting for your review before they can go to approvers.
+                </p>
+              </div>
+              <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-info/15 px-2 text-xs font-semibold text-info">
+                {reviewQ.data?.length ?? 0}
+              </span>
+            </div>
+            <CardContent className="p-0">
+              {reviewQ.isFetching && !reviewQ.data ? (
+                <LoadingState />
+              ) : reviewQ.isError ? (
+                <ErrorState message="Could not load review documents." onRetry={() => reviewQ.refetch()} />
+              ) : (
+                <DocumentTable docs={reviewQ.data ?? []} showStatus />
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">

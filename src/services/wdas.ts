@@ -17,10 +17,12 @@ function buildSearchParams(filter?: {
   approverId?: string;
   status?: DocStatus[];
   query?: string;
+  repositoryOnly?: boolean;
 }): string {
   const params = new URLSearchParams();
   params.set("Take", "100");
 
+  if (filter?.repositoryOnly) params.set("RepositoryOnly", "true");
   if (filter?.query) params.set("Query", filter.query);
   if (filter?.ownerId) params.set("OwnerUserId", filter.ownerId);
   if (filter?.approverId) params.set("ApproverUserId", filter.approverId);
@@ -37,6 +39,7 @@ async function searchDocuments(filter?: {
   approverId?: string;
   status?: DocStatus[];
   query?: string;
+  repositoryOnly?: boolean;
 }): Promise<Document[]> {
   const qs = buildSearchParams(filter);
   const result = await api.get<ApiSearchResultDto>(`/api/search?${qs}`);
@@ -108,6 +111,11 @@ export const wdas = {
     return searchDocuments(filter);
   },
 
+  listRepositoryDocuments: async (): Promise<Document[]> => {
+    const result = await api.get<ApiSearchResultDto>("/api/repository/documents?Take=100");
+    return result.items.map(mapSearchItem);
+  },
+
   /** Documents where the current user is an informational reviewer (added by creator or an approver). */
   listReviewDocuments: async (): Promise<Document[]> => {
     const data = await api.get<import("@/lib/api/types").ApiDashboardDocumentItemDto[]>(
@@ -147,7 +155,7 @@ export const wdas = {
     const recipients = reviewerIds.length
       ? reviewerIds.map((id) => {
           const u = users.find((x) => x.id === id);
-          return { recipientName: u?.name ?? id, recipientEmail: u?.email ?? null, reviewerUserId: id };
+          return { recipientName: u?.name ?? id, recipientEmail: u?.email ?? null, reviewerUserId: String(id) };
         })
       : reviewerNames.map((name) => {
           const u = users.find((x) => x.name === name);
@@ -229,6 +237,23 @@ export const wdas = {
       `/api/documents/${id}/reviewers`,
       { reviewerUserId },
     );
+    return mapDocument(dto);
+  },
+
+  /** Reviewer completes creator-gated review; document returns to owner when all reviewers finish. */
+  completeReviewerReview: async (id: string, comment?: string): Promise<Document> => {
+    const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(
+      `/api/documents/${id}/complete-review`,
+      { comment: comment ?? null },
+    );
+    return mapDocument(dto);
+  },
+
+  /** Owner sends document to approver after reviewer(s) have completed review. */
+  sendForApproval: async (id: string): Promise<Document> => {
+    const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(`/api/documents/${id}/submit`, {
+      idempotencyKey: null,
+    });
     return mapDocument(dto);
   },
 

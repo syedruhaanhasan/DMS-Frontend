@@ -101,7 +101,7 @@ function DocumentTableRow({
   const linkTo =
     isOwner || d.status === "draft"
       ? "/documents/$id"
-      : d.status === "pending"
+      : d.status === "pending" || d.status === "pending_reviewer"
         ? "/documents/$id/review"
         : "/documents/$id";
 

@@ -187,6 +187,10 @@ export function mapDocStatus(status: ApiDocumentStatus | string): DocStatus {
   switch (status) {
     case "Draft":
       return "draft";
+    case "PendingReviewerReview":
+      return "pending_reviewer";
+    case "PendingCreatorApproval":
+      return "pending_creator_send";
     case "Submitted":
     case "InApproval":
       return "pending";
@@ -201,7 +205,7 @@ export function mapDocStatus(status: ApiDocumentStatus | string): DocStatus {
     case "Finalized":
       return "approved";
     default:
-      return "pending";
+      return "draft";
   }
 }
 
@@ -296,6 +300,8 @@ export function mapDocument(
       email: r.recipientEmail ?? undefined,
       userId: r.reviewerUserId ? apiId(r.reviewerUserId) : undefined,
       addedById: r.addedById ? apiId(r.addedById) : undefined,
+      reviewedAt: r.reviewedAtUtc ?? undefined,
+      reviewComment: r.reviewComment ?? undefined,
     })),
     refId: documentRefId(dto.recordNumber),
     recordNumber: dto.recordNumber,
@@ -340,7 +346,7 @@ export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
     archiveDocumentId: dto.archiveDocumentId ?? undefined,
     subject: dto.subject,
     body: dto.snippet,
-    ownerId: "",
+    ownerId: apiId(dto.ownerUserId),
     ownerName: dto.ownerDisplayName,
     toIds: [],
     workflowId: "",
@@ -397,6 +403,10 @@ export function toApiDocStatus(status: DocStatus): ApiDocumentStatus | undefined
   switch (status) {
     case "draft":
       return "Draft";
+    case "pending_reviewer":
+      return "PendingReviewerReview";
+    case "pending_creator_send":
+      return "PendingCreatorApproval";
     case "pending":
       return "InApproval";
     case "ready_to_finalize":

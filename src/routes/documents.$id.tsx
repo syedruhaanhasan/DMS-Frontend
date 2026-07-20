@@ -82,6 +82,8 @@ function DetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmResubmit, setConfirmResubmit] = useState(false);
+  const [confirmSendForApproval, setConfirmSendForApproval] = useState(false);
+  const [sendingForApproval, setSendingForApproval] = useState(false);
 
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
@@ -115,13 +117,51 @@ function DetailPage() {
   const isCancelled = doc.status === "cancelled";
   const isReturned = doc.status === "returned";
   const isDraft = doc.status === "draft";
+  const isPendingReviewer = doc.status === "pending_reviewer";
+  const isPendingCreatorSend = doc.status === "pending_creator_send";
   const rejectionStep = doc.steps.find((s) => s.status === "rejected");
   const canCancel =
     doc.ownerId === user.id &&
-    (doc.status === "pending" || isReturned || isDraft || doc.status === "ready_to_finalize");
+    (doc.status === "pending" || isReturned || isDraft || doc.status === "ready_to_finalize" || isPendingReviewer || isPendingCreatorSend);
   const canFinalize = doc.ownerId === user.id && doc.status === "ready_to_finalize";
+  const canSendForApproval = doc.ownerId === user.id && isPendingCreatorSend;
   const canDelete = doc.ownerId === user.id && (isDraft || isCancelled);
   const canUpdate = doc.ownerId === user.id && (isRejected || isReturned || isDraft);
+
+  const completedReviewerNotes = (doc.reviewers ?? []).filter(
+    (reviewer) => reviewer.reviewComment?.trim() && reviewer.reviewedAt,
+  );
+
+  const activityComments = [
+    ...completedReviewerNotes.map((reviewer) => ({
+      id: `reviewer-${reviewer.id}`,
+      author: users.find((candidate) => candidate.id === reviewer.userId)?.name ?? reviewer.name,
+      role: "Reviewer",
+      timestamp: reviewer.reviewedAt!,
+      body: reviewer.reviewComment!,
+      action: "review" as const,
+    })),
+    ...doc.steps
+      .filter((step) => step.comment && step.actedAt)
+      .map((step) => ({
+        id: step.id,
+        author:
+          users.find((candidate) => candidate.id === step.approverId)?.name ??
+          "Approver",
+        role: users.find((candidate) => candidate.id === step.approverId)?.designation,
+        timestamp: step.actedAt!,
+        body: step.comment!,
+        action:
+          step.status === "approved"
+            ? ("approved" as const)
+            : step.status === "rejected"
+              ? ("rejected" as const)
+              : step.status === "returned"
+                ? ("returned" as const)
+                : ("comment" as const),
+        attachmentName: step.attachmentName,
+      })),
+  ];
 
   const beginEdit = (source: Document) => {
     setEditSubject(source.subject);
@@ -285,6 +325,23 @@ function DetailPage() {
     }
   };
 
+  const runSendForApproval = async () => {
+    if (sendingForApproval) return;
+    setSendingForApproval(true);
+    try {
+      const updated = await wdas.sendForApproval(doc.id);
+      qc.setQueryData(["doc", doc.id], updated);
+      void qc.invalidateQueries({ queryKey: ["docs"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard", "me"] });
+      setConfirmSendForApproval(false);
+      toast.success("Document sent for approval");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSendingForApproval(false);
+    }
+  };
+
   return (
     <div className="min-h-full bg-muted/20">
       <div className="sticky top-0 z-20 border-b bg-card/95 px-6 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/80">
@@ -375,6 +432,32 @@ function DetailPage() {
           </div>
         </div>
       </div>
+
+      {isPendingCreatorSend && doc.ownerId === user.id && (
+        <div className="mx-6 mt-6 space-y-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+          <p>Reviewer has completed their review. Send the document for approval when you are ready.</p>
+          {completedReviewerNotes.length > 0 && (
+            <div className="space-y-2 border-t border-amber-500/20 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80 dark:text-amber-100/80">
+                Reviewer feedback
+              </p>
+              {completedReviewerNotes.map((reviewer) => (
+                <div key={reviewer.id} className="rounded-md border border-amber-500/20 bg-background/60 px-3 py-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {users.find((candidate) => candidate.id === reviewer.userId)?.name ?? reviewer.name}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm">{reviewer.reviewComment}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {isPendingReviewer && doc.ownerId === user.id && (
+        <div className="mx-6 mt-6 rounded-md border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-950 dark:text-violet-100">
+          Waiting for reviewer to complete review. The approver will receive this document only after review is done and you send it for approval.
+        </div>
+      )}
 
       {isFinalized && (
         <div className="mx-6 mt-6 flex items-center gap-3 rounded-md border border-info/30 bg-info/10 px-4 py-3 text-sm">
@@ -583,28 +666,7 @@ function DetailPage() {
             </CardHeader>
             <CardContent className="space-y-6 pt-5">
               <WorkflowStepper steps={doc.steps} currentStepId={doc.currentStepId} compact />
-              <CommentThread
-                comments={doc.steps
-                  .filter((step) => step.comment && step.actedAt)
-                  .map((step) => ({
-                    id: step.id,
-                    author:
-                      users.find((candidate) => candidate.id === step.approverId)?.name ??
-                      "Approver",
-                    role: users.find((candidate) => candidate.id === step.approverId)?.designation,
-                    timestamp: step.actedAt!,
-                    body: step.comment!,
-                    action:
-                      step.status === "approved"
-                        ? ("approved" as const)
-                        : step.status === "rejected"
-                          ? ("rejected" as const)
-                          : step.status === "returned"
-                            ? ("returned" as const)
-                            : ("comment" as const),
-                    attachmentName: step.attachmentName,
-                  }))}
-              />
+              <CommentThread comments={activityComments} />
               <ApprovalTrail steps={doc.steps} currentStepId={doc.currentStepId} />
             </CardContent>
           </Card>
@@ -635,6 +697,17 @@ function DetailPage() {
               </>
             )}
 
+            {canSendForApproval && !showEditor && (
+              <Button className="w-full" disabled={sendingForApproval} onClick={() => setConfirmSendForApproval(true)}>
+                {sendingForApproval ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 h-4 w-4" />
+                )}
+                Send for approval
+              </Button>
+            )}
+
             {canFinalize && !showEditor && (
               <Button className="w-full" onClick={() => setFinalize(true)}>
                 <Hash className="mr-2 h-4 w-4" /> Finalize document
@@ -663,6 +736,15 @@ function DetailPage() {
           </div>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmSendForApproval}
+        onOpenChange={setConfirmSendForApproval}
+        title="Send for approval?"
+        description="The document will go to the assigned approver(s). Make sure the reviewer feedback has been addressed."
+        confirmLabel="Send for approval"
+        onConfirm={() => void runSendForApproval()}
+      />
 
       <ConfirmDialog
         open={confirmResubmit}

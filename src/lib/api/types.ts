@@ -16,7 +16,9 @@ export type ApiDocumentStatus =
   | "Rejected"
   | "ReadyForFinalization"
   | "Cancelled"
-  | "Finalized";
+  | "Finalized"
+  | "PendingReviewerReview"
+  | "PendingCreatorApproval";
 
 export type ApiDocumentPriority = "Normal" | "Urgent" | "Critical";
 
@@ -161,6 +163,15 @@ export interface ApiWorkflowDto {
   activeVersion: ApiWorkflowVersionSummaryDto | null;
 }
 
+export interface ApiWorkflowRoutingDto {
+  id: string;
+  approvalMode: ApiApprovalMode;
+  approvalSequence: "Sequential" | "Parallel";
+  approverUserIds: string[];
+  groups: ApiApproverGroupDto[];
+  matrixTiers: ApiMatrixTierDto[];
+}
+
 export interface ApiWorkflowStepActionDto {
   id: string;
   actorUserId: string;
@@ -190,6 +201,8 @@ export interface ApiDocumentRecipientDto {
   recipientEmail: string | null;
   reviewerUserId?: string | null;
   addedById?: string | null;
+  reviewedAtUtc?: string | null;
+  reviewComment?: string | null;
 }
 
 export interface ApiDocumentDto {
@@ -263,6 +276,7 @@ export interface ApiSearchResultItemDto {
   archiveDocumentId: string | null;
   subject: string;
   ownerDisplayName: string;
+  ownerUserId: string;
   status: string;
   amount: number | null;
   submittedAtUtc: string | null;

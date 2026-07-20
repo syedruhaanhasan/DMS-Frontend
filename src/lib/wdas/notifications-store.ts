@@ -10,6 +10,8 @@ export type NotificationType =
   | "returned"
   | "cancelled"
   | "finalized"
+  | "approval_recorded"
+  | "reviewer_added"
   | "system";
 
 export interface AppNotification {
@@ -36,6 +38,15 @@ function mapEventType(eventType: string): NotificationType {
       return "cancelled";
     case "Finalized":
       return "finalized";
+    case "ApprovalRecorded":
+      return "approval_recorded";
+    case "AddedAsReviewer":
+      return "reviewer_added";
+    case "ReviewCompleted":
+      return "approval_recorded";
+    case "DelegationNotice":
+    case "ExternalOtp":
+      return "system";
     default:
       return "system";
   }

@@ -3,7 +3,7 @@ import { useSession } from "@/lib/wdas/role-context";
 import { useUserNotifications, markAllRead, markRead, type NotificationType } from "@/lib/wdas/notifications-store";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Bell, FileText, Clock, XCircle, RotateCcw, Ban, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Bell, FileText, Clock, XCircle, RotateCcw, Ban, CheckCircle2, AlertTriangle, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { relTime } from "@/lib/wdas/format";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,7 +16,16 @@ const ICONS: Record<NotificationType, { icon: typeof Bell; color: string }> = {
   returned: { icon: RotateCcw, color: "text-warning" },
   cancelled: { icon: Ban, color: "text-muted-foreground" },
   finalized: { icon: CheckCircle2, color: "text-success" },
+  approval_recorded: { icon: CheckCircle2, color: "text-success" },
+  reviewer_added: { icon: Eye, color: "text-info" },
+  system: { icon: Bell, color: "text-muted-foreground" },
 };
+
+function notificationLink(type: NotificationType, role: string): "/documents/$id/review" | "/documents/$id" {
+  if (type === "reviewer_added") return "/documents/$id/review";
+  if (role === "approver" && type === "new_request") return "/documents/$id/review";
+  return "/documents/$id";
+}
 
 export function NotificationBell() {
   const { user, role } = useSession();
@@ -53,8 +62,8 @@ export function NotificationBell() {
             <div className="p-8 text-center text-sm text-muted-foreground">No notifications yet.</div>
           ) : (
             list.map((n) => {
-              const { icon: Icon, color } = ICONS[n.type];
-              const to = role === "approver" && n.type === "new_request" ? "/documents/$id/review" : "/documents/$id";
+              const { icon: Icon, color } = ICONS[n.type] ?? ICONS.system;
+              const to = notificationLink(n.type, role);
               return (
                 <Link
                   key={n.id}
