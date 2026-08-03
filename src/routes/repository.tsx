@@ -18,13 +18,10 @@ import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-sta
 import { useState, useMemo } from "react";
 import {
   Archive,
-  Building2,
-  CalendarDays,
   CheckSquare2,
   ChevronDown,
   Download,
   FileText,
-  Folder,
   FolderArchive,
   FolderSearch,
   Grid2X2,
@@ -83,13 +80,31 @@ function Repository() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { users } = useUsers();
-  const { user } = useSession();
+  const { user, role } = useSession();
   const canFetch = useCanFetchDocuments();
   const q = useQuery({
     queryKey: ["docs", "repository"],
     queryFn: () => wdas.listRepositoryDocuments(),
     enabled: canFetch,
   });
+  const historyScope =
+    role === "super_admin" || role === "auditor"
+      ? "org"
+      : role === "dept_admin"
+        ? "department"
+        : "personal";
+  const historySubtitle =
+    historyScope === "org"
+      ? "Organization-wide documents and workflow actions."
+      : historyScope === "department"
+        ? "History for all users in your department — owned documents and their approve/reject/return/comment actions."
+        : "Your personal history — documents you own and every approve/reject/return/comment action you took.";
+  const emptyDescription =
+    historyScope === "org"
+      ? "Try adjusting your advanced filters."
+      : historyScope === "department"
+        ? "No department history matches these filters."
+        : "No personal history matches these filters.";
 
   const { ownerOptions, approverOptions } = useMemo(() => {
     const docs = q.data ?? [];
@@ -199,31 +214,29 @@ function Repository() {
 
   return (
     <div className="min-h-full bg-background">
-      <header className="relative overflow-hidden border-b border-slate-800 bg-slate-950 px-6 py-7 text-white sm:px-8">
-        <div className="absolute right-8 top-0 h-44 w-44 rounded-full bg-amber-400/10 blur-3xl" />
+      <header className="relative overflow-hidden border-b border-border bg-card px-6 py-7 text-foreground sm:px-8">
+        <div className="absolute right-8 top-0 h-44 w-44 rounded-full bg-primary/15 blur-3xl" />
         <div className="relative mx-auto max-w-[1500px]">
-          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-400">
             <FolderArchive className="h-3.5 w-3.5" />
             Enterprise archive
           </div>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Document Repository
+                Document History
               </h1>
-              <p className="mt-1.5 text-sm text-slate-400">
-                Approved, rejected, and cancelled documents with a completed workflow.
-              </p>
+              <p className="mt-1.5 text-sm text-muted-foreground">{historySubtitle}</p>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 p-1">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/60 p-1">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setView("list")}
                 className={cn(
-                  "h-8 px-3 text-slate-400 hover:bg-slate-800 hover:text-white",
+                  "h-8 px-3 text-muted-foreground hover:bg-background hover:text-foreground",
                   view === "list" &&
-                    "bg-amber-400 text-slate-950 hover:bg-amber-300 hover:text-slate-950",
+                    "bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-foreground",
                 )}
               >
                 <List className="mr-1.5 h-4 w-4" /> List
@@ -233,9 +246,9 @@ function Repository() {
                 size="sm"
                 onClick={() => setView("grid")}
                 className={cn(
-                  "h-8 px-3 text-slate-400 hover:bg-slate-800 hover:text-white",
+                  "h-8 px-3 text-muted-foreground hover:bg-background hover:text-foreground",
                   view === "grid" &&
-                    "bg-amber-400 text-slate-950 hover:bg-amber-300 hover:text-slate-950",
+                    "bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-foreground",
                 )}
               >
                 <Grid2X2 className="mr-1.5 h-4 w-4" /> Grid
@@ -245,68 +258,7 @@ function Repository() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1500px] gap-5 p-6 sm:p-8 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="space-y-4">
-          <Card className="overflow-hidden border-slate-200 bg-slate-950 text-slate-200 shadow-sm">
-            <div className="border-b border-slate-800 px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-400">
-                Archive folders
-              </p>
-              <p className="mt-1 text-xs text-slate-500">{q.data?.length ?? 0} total records</p>
-            </div>
-            <div className="space-y-5 p-3">
-              <FolderGroup icon={Building2} label="Department">
-                <RailButton
-                  active={f.department === "all"}
-                  label="All departments"
-                  onClick={() => upd("department", "all")}
-                />
-                {DEPARTMENTS.map((department) => (
-                  <RailButton
-                    key={department}
-                    active={f.department === department}
-                    label={department}
-                    onClick={() => upd("department", department)}
-                  />
-                ))}
-              </FolderGroup>
-              <FolderGroup icon={CalendarDays} label="Year">
-                <RailButton
-                  active={year === "all"}
-                  label="All years"
-                  onClick={() => setYear("all")}
-                />
-                {years.map((item) => (
-                  <RailButton
-                    key={item}
-                    active={year === item.toString()}
-                    label={item.toString()}
-                    onClick={() => setYear(item.toString())}
-                  />
-                ))}
-              </FolderGroup>
-              <FolderGroup icon={FileText} label="Document type">
-                <RailButton
-                  active={documentType === "all"}
-                  label="All documents"
-                  onClick={() => setDocumentType("all")}
-                />
-                <RailButton
-                  active={documentType === "financial"}
-                  label="Financial"
-                  onClick={() => setDocumentType("financial")}
-                />
-                <RailButton
-                  active={documentType === "general"}
-                  label="General"
-                  onClick={() => setDocumentType("general")}
-                />
-              </FolderGroup>
-            </div>
-          </Card>
-        </aside>
-
-        <main className="min-w-0 space-y-4">
+      <div className="mx-auto max-w-[1500px] space-y-4 p-6 sm:p-8">
           <Card className="overflow-hidden border-border shadow-sm">
             <Collapsible open={expanded} onOpenChange={setExpanded}>
               <CollapsibleTrigger asChild>
@@ -315,7 +267,7 @@ function Repository() {
                     <SlidersHorizontal className="h-4 w-4 text-amber-600" />
                     <p className="text-sm font-semibold text-foreground">Advanced search</p>
                     {allFiltersCount > 0 && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">
                         {allFiltersCount} active
                       </span>
                     )}
@@ -341,7 +293,7 @@ function Repository() {
                   <div className="space-y-1.5">
                     <Label className="text-xs">Subject</Label>
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         value={f.subject}
                         onChange={(e) => upd("subject", e.target.value)}
@@ -420,6 +372,40 @@ function Repository() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
+                    <Label className="text-xs">Year</Label>
+                    <Select value={year} onValueChange={setYear}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All years</SelectItem>
+                        {years.map((item) => (
+                          <SelectItem key={item} value={item.toString()}>
+                            {item}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Document type</Label>
+                    <Select
+                      value={documentType}
+                      onValueChange={(v) =>
+                        setDocumentType(v as "all" | "financial" | "general")
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All documents</SelectItem>
+                        <SelectItem value="financial">Financial</SelectItem>
+                        <SelectItem value="general">General</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
                     <Label className="text-xs" htmlFor="repo-date-from">
                       From date
                     </Label>
@@ -481,27 +467,27 @@ function Repository() {
           </Card>
 
           <Card className="overflow-hidden border-border shadow-sm">
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950 px-4 py-3 text-white">
+            <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/40 px-4 py-3 text-foreground">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={selectVisible}
                 disabled={!filtered.length}
-                className="text-slate-300 hover:bg-slate-800 hover:text-white"
+                className="text-muted-foreground hover:bg-background hover:text-foreground"
               >
                 <CheckSquare2 className="mr-2 h-4 w-4" />
                 {filtered.length > 0 && filtered.every((doc) => selected.has(doc.id))
                   ? "Clear visible"
                   : "Select visible"}
               </Button>
-              <span className="text-xs text-slate-500">{selected.size} selected</span>
+              <span className="text-xs text-muted-foreground">{selected.size} selected</span>
               <div className="ml-auto flex gap-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   disabled
                   title="Export requires backend integration"
-                  className="text-slate-400"
+                  className="text-muted-foreground"
                 >
                   <Download className="mr-1.5 h-4 w-4" /> Export
                 </Button>
@@ -510,7 +496,7 @@ function Repository() {
                   size="sm"
                   disabled
                   title="Archive requires backend integration"
-                  className="text-slate-400"
+                  className="text-muted-foreground"
                 >
                   <Archive className="mr-1.5 h-4 w-4" /> Archive
                 </Button>
@@ -525,7 +511,7 @@ function Repository() {
                 <EmptyState
                   icon={<FolderSearch className="h-8 w-8" />}
                   title="No documents match your filters"
-                  description="Try adjusting your archive folders or advanced filters."
+                  description={emptyDescription}
                   action={
                     <Button variant="outline" onClick={clearFilters}>
                       Clear filters
@@ -533,7 +519,7 @@ function Repository() {
                   }
                 />
               ) : view === "list" ? (
-                <DocumentTable docs={filtered} showStatus />
+                <DocumentTable docs={filtered} showStatus showHistoryActions />
               ) : (
                 <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
                   {filtered.map((doc) => {
@@ -561,7 +547,7 @@ function Repository() {
                           />
                           <div className="min-w-0 flex-1">
                             <div className="mb-3 flex items-start justify-between gap-2">
-                              <div className="rounded-lg bg-amber-50 p-2 text-amber-700">
+                              <div className="rounded-lg bg-amber-50 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
                                 <FileText className="h-4 w-4" />
                               </div>
                               <StatusBadge status={doc.status} />
@@ -602,6 +588,23 @@ function Repository() {
                                 </dd>
                               </div>
                             </dl>
+                            {doc.steps.length > 0 && (
+                              <div className="mt-3 space-y-1.5 border-t border-border pt-3">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  User actions
+                                </p>
+                                {doc.steps.map((step) => (
+                                  <div key={step.id} className="rounded-md bg-muted/40 px-2 py-1.5 text-xs">
+                                    <span className="font-semibold">{step.actorName ?? "User"}</span>
+                                    <span className="mx-1 text-muted-foreground">·</span>
+                                    <span>{step.actionType ?? step.status}</span>
+                                    {step.comment ? (
+                                      <p className="mt-0.5 line-clamp-2 text-muted-foreground">{step.comment}</p>
+                                    ) : null}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </article>
@@ -619,53 +622,7 @@ function Repository() {
             </Link>
             .
           </p>
-        </main>
       </div>
     </div>
-  );
-}
-
-function FolderGroup({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: typeof Folder;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-        <Icon className="h-3.5 w-3.5" /> {label}
-      </div>
-      <div className="space-y-0.5">{children}</div>
-    </div>
-  );
-}
-
-function RailButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-        active
-          ? "bg-amber-400 font-semibold text-slate-950"
-          : "text-slate-400 hover:bg-slate-900 hover:text-white",
-      )}
-    >
-      <Folder className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{label}</span>
-    </button>
   );
 }

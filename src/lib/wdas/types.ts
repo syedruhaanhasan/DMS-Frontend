@@ -19,10 +19,14 @@ export type DocStatus =
   | "returned"
   | "cancelled";
 
-/** Documents eligible for the enterprise repository (workflow finished). */
+/** Documents shown on History (non-draft; server already scopes by ownership/actions). */
 export const REPOSITORY_DOC_STATUSES: DocStatus[] = [
-  "approved",
+  "pending_reviewer",
+  "pending_creator_send",
+  "pending",
+  "returned",
   "ready_to_finalize",
+  "approved",
   "rejected",
   "cancelled",
 ];
@@ -143,6 +147,9 @@ export interface ApprovalStep {
   delegateFromId?: string; // if action was taken by delegate
   reassignedFromId?: string; // if step was force-reassigned
   reassignReason?: string;
+  /** History feed extras */
+  actorName?: string;
+  actionType?: string;
 }
 
 export interface Attachment {
@@ -177,6 +184,8 @@ export interface Document {
   steps: ApprovalStep[];
   attachments: Attachment[];
   reviewers: DocumentReviewer[];
+  /** User ids allowed to download (owner always can). Subset of reviewers + approvers. */
+  downloadAllowedUserIds?: string[];
   cancelReason?: string;
   /** True once the active step's approver has opened (read) the document. */
   seenByApprover?: boolean;

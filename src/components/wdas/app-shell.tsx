@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard, Inbox, FileText, FilePlus, FolderSearch,
   BarChart3, Search, ChevronLeft, ChevronRight, LogOut, Settings,
   Workflow as WorkflowIcon, GitBranch, Mail, UserPlus, ChevronDown, UserCog, Building2, Network, FileType,
-  Sun, Moon, Plus, Shield, ScrollText, IdCard,
+  Sun, Moon, Plus, Shield, ScrollText, IdCard, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, ROLE_LABEL, isSuperAdmin } from "@/lib/wdas/role-context";
@@ -22,6 +23,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "./notification-bell";
+import { wdas } from "@/services/wdas";
+import { useCanFetchDocuments } from "@/lib/wdas/use-document-query";
 
 interface NavItem { to: string; labelKey: I18nKey; icon: typeof LayoutDashboard; permission: string; disabled?: boolean; }
 interface NavGroup { labelKey: I18nKey; permission: string; items: NavItem[]; }
@@ -29,6 +32,7 @@ interface NavGroup { labelKey: I18nKey; permission: string; items: NavItem[]; }
 const MAIN_NAV: NavItem[] = [
   { to: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard, permission: P.nav.dashboard },
   { to: "/inbox", labelKey: "inbox", icon: Inbox, permission: P.nav.inbox },
+  { to: "/review-inbox", labelKey: "reviewInbox", icon: Eye, permission: P.nav.reviewInbox },
   { to: "/documents/new", labelKey: "newDocument", icon: FilePlus, permission: P.nav.documentsNew },
   { to: "/documents", labelKey: "myDocuments", icon: FileText, permission: P.nav.documents },
   { to: "/repository", labelKey: "repository", icon: FolderSearch, permission: P.nav.repository },
@@ -62,7 +66,19 @@ const SETTINGS_GROUP: NavGroup = {
   ],
 };
 
-function NavLinkItem({ item, collapsed, active, lang }: { item: NavItem; collapsed: boolean; active: boolean; lang: ReturnType<typeof useLanguage>["lang"] }) {
+function NavLinkItem({
+  item,
+  collapsed,
+  active,
+  lang,
+  badgeCount,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  active: boolean;
+  lang: ReturnType<typeof useLanguage>["lang"];
+  badgeCount?: number;
+}) {
   const Icon = item.icon;
   const label = t(item.labelKey, lang);
   if (item.disabled) {
@@ -90,8 +106,10 @@ function NavLinkItem({ item, collapsed, active, lang }: { item: NavItem; collaps
       )}
       <Icon className={cn("h-[18px] w-[18px] shrink-0 transition-colors", active ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-sidebar-foreground")} />
       {!collapsed && <span className="truncate">{label === "Inbox" ? "Approval Box" : label}</span>}
-      {!collapsed && item.to === "/inbox" && (
-        <span className="ml-auto min-w-5 rounded-full bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums text-primary-foreground">7</span>
+      {!collapsed && typeof badgeCount === "number" && badgeCount > 0 && (
+        <span className="ml-auto min-w-5 rounded-full bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums text-primary-foreground">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
       )}
     </Link>
   );
@@ -107,6 +125,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [configOpen, setConfigOpen] = useState(
     pathname.startsWith("/config") || pathname.startsWith("/settings/delegation") || role === "super_admin",
   );
+  const canFetch = useCanFetchDocuments();
+  const inboxBadgeQ = useQuery({
+    queryKey: ["dashboard", "me", user.id],
+    queryFn: () => wdas.getPersonalDashboard(user.id),
+    enabled: canFetch && !!user.id && can(P.nav.inbox),
+    staleTime: 30_000,
+  });
+  const approvalBadgeCount =
+    (inboxBadgeQ.data?.pending.length ?? 0) + (inboxBadgeQ.data?.delegated.length ?? 0);
 
   const initials = user.name.split(" ").map((n) => n[0]).slice(0, 2).join("");
   const isActive = (to: string) => pathname === to || (to !== "/dashboard" && pathname.startsWith(to));
@@ -140,7 +167,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <p className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/45">{t("workspace", lang)}</p>
           )}
           {MAIN_NAV.filter((n) => can(n.permission)).map((item) => (
-            <NavLinkItem key={item.to} item={item} collapsed={collapsed} active={isActive(item.to)} lang={lang} />
+            <NavLinkItem
+              key={item.to}
+              item={item}
+              collapsed={collapsed}
+              active={isActive(item.to)}
+              lang={lang}
+              badgeCount={item.to === "/inbox" ? approvalBadgeCount : undefined}
+            />
           ))}
 
           {can(CONFIG_GROUP.permission) && superAdminView && (
@@ -203,14 +237,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-white/10 bg-[#0D0D0F] px-4 text-[#F5F5F2] md:px-5">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background px-4 text-foreground md:px-5">
           <div className="relative w-full max-w-lg">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search documents, workflows, people…"
-                className="h-9 rounded-lg border-white/10 bg-white/[0.06] pl-9 text-sm text-white shadow-none placeholder:text-white/40 focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/50"
+                className="h-9 rounded-lg border-border bg-muted/60 pl-9 text-sm text-foreground shadow-none placeholder:text-muted-foreground focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/50"
               />
-              <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 select-none items-center gap-1 rounded border border-white/10 bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-white/50 sm:inline-flex">⌘K</kbd>
+              <kbd className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-flex">⌘K</kbd>
           </div>
 
           <div className="flex-1" />
@@ -227,8 +261,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           {availableRoles.length > 1 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-2 rounded-lg border-white/15 bg-white/[0.06] text-white shadow-none hover:bg-white/10 hover:text-white">
-                  <span className="hidden text-white/50 sm:inline">View as</span>
+                <Button variant="outline" size="sm" className="h-9 gap-2 rounded-lg border-border bg-card text-foreground shadow-none hover:bg-muted">
+                  <span className="hidden text-muted-foreground sm:inline">View as</span>
                   <span className="font-medium">{ROLE_LABEL[role]}</span>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
@@ -253,7 +287,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={toggleTheme}
             aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
             title={theme === "dark" ? "Light mode" : "Dark mode"}
-            className="h-9 w-9 rounded-lg border-white/15 bg-white/[0.06] text-white shadow-none hover:bg-white/10 hover:text-white"
+            className="h-9 w-9 rounded-lg border-border bg-card text-foreground shadow-none hover:bg-muted"
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
@@ -262,15 +296,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-white/10">
-                <Avatar className="h-8 w-8 ring-1 ring-white/15">
+              <button className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted">
+                <Avatar className="h-8 w-8 ring-1 ring-border">
                   <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials}</AvatarFallback>
                 </Avatar>
                 <div className="hidden text-left sm:block">
                   <p className="text-xs font-semibold leading-tight">{user.name}</p>
-                  <p className="text-[11px] leading-tight text-white/45">{ROLE_LABEL[role]}</p>
+                  <p className="text-[11px] leading-tight text-muted-foreground">{ROLE_LABEL[role]}</p>
                 </div>
-                <ChevronDown className="hidden h-3.5 w-3.5 text-white/45 sm:block" />
+                <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-60">
@@ -287,12 +321,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
-        <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t border-white/10 bg-[#0D0D0F] px-2 md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t border-border bg-background px-2 md:hidden">
           {MAIN_NAV.slice(0, 5).filter((item) => can(item.permission)).map((item) => {
             const Icon = item.icon;
             const active = isActive(item.to);
             return (
-              <Link key={item.to} to={item.to} className={cn("flex flex-col items-center justify-center gap-1 text-[10px]", active ? "text-primary" : "text-white/55")}>
+              <Link key={item.to} to={item.to} className={cn("flex flex-col items-center justify-center gap-1 text-[10px]", active ? "text-primary" : "text-muted-foreground")}>
                 <Icon className="h-5 w-5" />
                 <span>{t(item.labelKey, lang)}</span>
               </Link>

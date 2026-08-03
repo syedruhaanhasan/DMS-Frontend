@@ -78,7 +78,7 @@ function MyDocs() {
               <Layers3 className="h-3.5 w-3.5" />
               Personal workspace
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">My Documents</h1>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Documents</h1>
             <p className="mt-1.5 text-sm text-slate-400">
               Create, track, and manage your document workflow.
             </p>

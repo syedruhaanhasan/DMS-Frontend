@@ -25,6 +25,8 @@ interface Props {
   docs: Document[];
   showStatus?: boolean;
   showActions?: "approver" | "none";
+  /** Show workflow actions (approve/reject/return/comment) from History API. */
+  showHistoryActions?: boolean;
   /** Show whether the current approver has opened (read) the document. */
   showReadStatus?: boolean;
   onApprove?: (id: string) => void;
@@ -35,6 +37,7 @@ export function DocumentTable({
   docs,
   showStatus,
   showActions = "none",
+  showHistoryActions,
   showReadStatus,
   onApprove,
   onReject,
@@ -51,10 +54,11 @@ export function DocumentTable({
             <TableHead>Requester</TableHead>
             <TableHead className="text-right">Amount</TableHead>
             <TableHead>Priority</TableHead>
-            <TableHead>SLA</TableHead>
-            <TableHead>Waiting</TableHead>
+            {!showHistoryActions && <TableHead>SLA</TableHead>}
+            {!showHistoryActions && <TableHead>Waiting</TableHead>}
             {showStatus && <TableHead>Status</TableHead>}
-            <TableHead className="text-right">Actions</TableHead>
+            {showHistoryActions && <TableHead>User actions</TableHead>}
+            <TableHead className="text-right">Open</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -65,6 +69,7 @@ export function DocumentTable({
               queuePosition={index + 1}
               showStatus={showStatus}
               showActions={showActions}
+              showHistoryActions={showHistoryActions}
               showReadStatus={showReadStatus}
               onApprove={onApprove}
               onReject={onReject}
@@ -81,6 +86,7 @@ function DocumentTableRow({
   queuePosition,
   showStatus,
   showActions,
+  showHistoryActions,
   showReadStatus,
   onApprove,
   onReject,
@@ -89,6 +95,7 @@ function DocumentTableRow({
   queuePosition: number;
   showStatus?: boolean;
   showActions?: "approver" | "none";
+  showHistoryActions?: boolean;
   showReadStatus?: boolean;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
@@ -148,13 +155,17 @@ function DocumentTableRow({
       <TableCell>
         <PriorityBadge priority={d.priority} />
       </TableCell>
-      <TableCell>
-        <SlaBadge sla={d.sla} />
-      </TableCell>
-      <TableCell>
-        <span className="font-mono text-sm font-medium">{d.daysPending}d</span>
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">pending</p>
-      </TableCell>
+      {!showHistoryActions && (
+        <TableCell>
+          <SlaBadge sla={d.sla} />
+        </TableCell>
+      )}
+      {!showHistoryActions && (
+        <TableCell>
+          <span className="font-mono text-sm font-medium">{d.daysPending}d</span>
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">pending</p>
+        </TableCell>
+      )}
       {showStatus && (
         <TableCell>
           <div className="flex flex-col items-start gap-1">
@@ -173,11 +184,39 @@ function DocumentTableRow({
           </div>
         </TableCell>
       )}
+      {showHistoryActions && (
+        <TableCell className="max-w-xs">
+          {d.steps.length === 0 ? (
+            <span className="text-xs text-muted-foreground">No recorded actions</span>
+          ) : (
+            <ul className="space-y-1.5">
+              {d.steps.map((step) => (
+                <li key={step.id} className="rounded-md border border-border/70 bg-muted/30 px-2 py-1.5 text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold text-foreground">
+                      {step.actorName ?? "User"}
+                    </span>
+                    <span className="rounded-full bg-background px-1.5 py-0.5 font-medium text-muted-foreground">
+                      {step.actionType ?? step.status}
+                    </span>
+                  </div>
+                  {step.comment ? (
+                    <p className="mt-0.5 line-clamp-2 text-muted-foreground">{step.comment}</p>
+                  ) : null}
+                  {step.actedAt ? (
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">{absTime(step.actedAt)}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </TableCell>
+      )}
       <TableCell className="text-right">
         <div className="flex justify-end gap-1.5">
           <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
             <Link to={linkTo} params={{ id: d.id }}>
-              Review <ArrowRight className="h-3.5 w-3.5" />
+              Open <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </Button>
           {showActions === "approver" && d.status === "pending" && (

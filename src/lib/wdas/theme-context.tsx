@@ -31,13 +31,15 @@ function applyThemeClass(theme: AppTheme) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<AppTheme>("light");
+  const [theme, setThemeState] = useState<AppTheme>(() => {
+    const initial = readStoredTheme();
+    applyThemeClass(initial);
+    return initial;
+  });
 
   useEffect(() => {
-    const initial = readStoredTheme();
-    setThemeState(initial);
-    applyThemeClass(initial);
-  }, []);
+    applyThemeClass(theme);
+  }, [theme]);
 
   const setTheme = (next: AppTheme) => {
     setThemeState(next);

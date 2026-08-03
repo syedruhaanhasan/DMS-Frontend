@@ -16,6 +16,7 @@ interface Props {
   cancelLabel?: string;
   variant?: "default" | "destructive" | "success" | "warning";
   requireReason?: boolean;
+  reasonLabel?: string;
   onConfirm: (reason?: string) => void | Promise<void>;
   extraContent?: ReactNode;
 }
@@ -23,7 +24,7 @@ interface Props {
 export function ConfirmDialog({
   open, onOpenChange, title, description,
   confirmLabel = "Confirm", cancelLabel = "Cancel",
-  variant = "default", requireReason, onConfirm, extraContent,
+  variant = "default", requireReason, reasonLabel = "Reason", onConfirm, extraContent,
 }: Props) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,8 +45,8 @@ export function ConfirmDialog({
         {extraContent}
         {requireReason && (
           <div className="space-y-2">
-            <Label htmlFor="reason">Reason <span className="text-destructive">*</span></Label>
-            <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Provide a clear reason…" rows={3} />
+            <Label htmlFor="reason">{reasonLabel} <span className="text-destructive">*</span></Label>
+            <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Provide a clear comment…" rows={3} />
           </div>
         )}
         <AlertDialogFooter>

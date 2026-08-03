@@ -5,8 +5,23 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { preventDismissForPortaledOverlay, shouldBlockOverlayDismiss } from "@/lib/radix-overlay";
 
-const Dialog = DialogPrimitive.Root;
+function Dialog({
+  onOpenChange,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>) {
+  return (
+    <DialogPrimitive.Root
+      {...props}
+      onOpenChange={(open) => {
+        // Select close can emit a ghost outside-click that tries to dismiss the dialog.
+        if (!open && shouldBlockOverlayDismiss()) return;
+        onOpenChange?.(open);
+      }}
+    />
+  );
+}
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
@@ -32,7 +47,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, onInteractOutside, onFocusOutside, onEscapeKeyDown, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -42,6 +57,28 @@ const DialogContent = React.forwardRef<
         className,
       )}
       {...props}
+      onPointerDownOutside={(e) => {
+        preventDismissForPortaledOverlay(e);
+        onPointerDownOutside?.(e);
+      }}
+      onInteractOutside={(e) => {
+        preventDismissForPortaledOverlay(e);
+        onInteractOutside?.(e);
+      }}
+      onFocusOutside={(e) => {
+        preventDismissForPortaledOverlay(e);
+        onFocusOutside?.(e);
+      }}
+      onEscapeKeyDown={(e) => {
+        // Let an open Select handle Escape first; don't close the dialog in the same keypress.
+        if (
+          document.querySelector("[data-radix-select-content][data-state='open']") ||
+          document.querySelector("[data-radix-popper-content-wrapper]")
+        ) {
+          e.preventDefault();
+        }
+        onEscapeKeyDown?.(e);
+      }}
     >
       {children}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">

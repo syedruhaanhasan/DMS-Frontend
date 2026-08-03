@@ -21,20 +21,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/wdas/confirm-dialog";
 import { formatPKR } from "@/lib/wdas/format";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   Check,
   Clock3,
+  Download,
   Eye,
   FileText,
+  Loader2,
   Paperclip,
   RotateCcw,
   ShieldCheck,
   UserPlus,
   X,
 } from "lucide-react";
+import { downloadHtmlAsPdf } from "@/lib/wdas/download-html-pdf";
 
 export const Route = createFileRoute("/documents/$id/review")({
   component: ReviewPage,
@@ -42,7 +45,7 @@ export const Route = createFileRoute("/documents/$id/review")({
 
 function ReviewPage() {
   const { id } = Route.useParams();
-  const { user } = useSession();
+  const { user, role } = useSession();
   const { users } = useUsers();
   const qc = useQueryClient();
   const router = useRouter();
@@ -56,6 +59,9 @@ function ReviewPage() {
   const [reviewerFocused, setReviewerFocused] = useState(false);
   const [addingReviewer, setAddingReviewer] = useState(false);
   const [completingReview, setCompletingReview] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (q.data && user.id && q.data.ownerId === user.id) {
@@ -124,6 +130,36 @@ function ReviewPage() {
   const reviewerOnly = isGatedReview || (isReviewer && !isYourTurn);
   const alreadyAddedByMe = reviewers.some((r) => r.addedById === user.id);
   const canAddReviewer = isYourTurn && !alreadyAddedByMe;
+  const canDownloadDoc =
+    role === "super_admin" ||
+    role === "auditor" ||
+    (doc.downloadAllowedUserIds ?? []).map(String).includes(String(user.id));
+
+  const downloadDocumentPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      if (doc.archiveDocumentId) {
+        await wdas.downloadArchive(doc.archiveDocumentId, "pdf", doc.subject.trim() || undefined);
+      } else {
+        await downloadHtmlAsPdf({
+          title: doc.subject,
+          html: doc.body || "<p></p>",
+          meta: [
+            { label: "Owner", value: owner?.name ?? "" },
+            { label: "Ref", value: doc.refId ?? doc.id },
+            { label: "Status", value: doc.status },
+          ],
+          fileName: doc.subject.trim() || "document",
+        });
+      }
+      toast.success("PDF downloaded");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not download PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const reviewerCandidates = users.filter((u) => {
     if (u.id === user.id) return false;
     if (reviewers.some((r) => r.userId === u.id)) return false;
@@ -166,7 +202,7 @@ function ReviewPage() {
           ? "Review completed — document returned to approver"
           : "Review completed — document returned to creator",
       );
-      router.navigate({ to: "/inbox" });
+      router.navigate({ to: reviewerOnly ? "/review-inbox" : "/inbox" });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -211,8 +247,13 @@ function ReviewPage() {
 
   const runAction = async (reason?: string) => {
     if (!confirm) return;
+    const note = (reason ?? comment).trim();
+    if (!note) {
+      toast.error("A comment is required before you can approve or decide.");
+      return;
+    }
     try {
-      const updated = await wdas.actOnDocument(doc.id, confirm, reason ?? comment, user.id);
+      const updated = await wdas.actOnDocument(doc.id, confirm, note, user.id);
       await refreshWorkflowViews(qc, { userId: user.id, document: updated });
       toast.success(
         confirm === "approve"
@@ -227,13 +268,28 @@ function ReviewPage() {
     }
   };
 
+  const uploadApproverAttachment = async (file: File | undefined) => {
+    if (!file || !isYourTurn) return;
+    setUploadingAttachment(true);
+    try {
+      await wdas.uploadAttachment(doc.id, file);
+      await q.refetch();
+      toast.success("Attachment added");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUploadingAttachment(false);
+      if (attachInputRef.current) attachInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="min-h-full bg-muted/20">
       <div className="sticky top-0 z-20 border-b border-border/70 bg-card/95 px-6 py-3 shadow-sm backdrop-blur">
         <div className="mb-3 flex items-center gap-2 text-sm">
           <Button asChild variant="ghost" size="sm" className="-ml-2 h-7 gap-1">
-            <Link to={reviewerOnly ? "/inbox" : "/inbox"}>
-              <ArrowLeft className="h-4 w-4" /> {reviewerOnly ? "Back to inbox" : "Approval Box"}
+            <Link to={reviewerOnly ? "/review-inbox" : "/inbox"}>
+              <ArrowLeft className="h-4 w-4" /> {reviewerOnly ? "Back to Reviewer Inbox" : "Approval Box"}
             </Link>
           </Button>
         </div>
@@ -256,6 +312,18 @@ function ReviewPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canDownloadDoc && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={downloadingPdf}
+                onClick={() => void downloadDocumentPdf()}
+              >
+                {downloadingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Download PDF
+              </Button>
+            )}
             <PriorityBadge priority={doc.priority} />
             <StatusBadge status={doc.status} />
             <SlaBadge sla={doc.sla} />
@@ -292,9 +360,23 @@ function ReviewPage() {
                 <CardTitle className="text-sm">Document preview</CardTitle>
                 <p className="mt-0.5 text-xs text-muted-foreground">Read-only approval copy</p>
               </div>
-              <span className="rounded border bg-muted/50 px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground">
-                Content
-              </span>
+              <div className="flex items-center gap-2">
+                {canDownloadDoc && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5"
+                    disabled={downloadingPdf}
+                    onClick={() => void downloadDocumentPdf()}
+                  >
+                    {downloadingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Download PDF
+                  </Button>
+                )}
+                <span className="rounded border bg-muted/50 px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground">
+                  Content
+                </span>
+              </div>
             </CardHeader>
             <CardContent className="bg-muted/40 p-4 sm:p-8">
               <article className="mx-auto min-h-[680px] max-w-[760px] border border-border/80 bg-card px-8 py-10 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:px-12">
@@ -308,7 +390,7 @@ function ReviewPage() {
                   </p>
                 </div>
                 <div
-                  className="prose prose-sm max-w-none [&_p]:my-3"
+                  className="wysiwyg-content text-sm"
                   dangerouslySetInnerHTML={{ __html: doc.body }}
                 />
               </article>
@@ -479,11 +561,17 @@ function ReviewPage() {
                   </p>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="cmt">Comment</Label>
+                  <Label htmlFor="cmt">
+                    Comment <span className="text-destructive">*</span>
+                  </Label>
                   <Textarea
                     id="cmt"
                     rows={4}
-                    placeholder={reviewerOnly ? "Add your review notes…" : "Add your notes…"}
+                    placeholder={
+                      reviewerOnly
+                        ? "Add your review notes…"
+                        : "Comment is required before you can approve…"
+                    }
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     disabled={!canComment}
@@ -492,14 +580,26 @@ function ReviewPage() {
                 {!reviewerOnly && (
                   <div className="space-y-2">
                     <Label>Attachment (optional)</Label>
+                    <input
+                      ref={attachInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => void uploadApproverAttachment(e.target.files?.[0])}
+                    />
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="w-full justify-start gap-2"
-                      disabled={!isYourTurn}
+                      disabled={!isYourTurn || uploadingAttachment}
+                      onClick={() => attachInputRef.current?.click()}
                     >
-                      <Paperclip className="h-4 w-4" /> Attach file
+                      {uploadingAttachment ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Paperclip className="h-4 w-4" />
+                      )}
+                      {uploadingAttachment ? "Uploading…" : "Attach file"}
                     </Button>
                   </div>
                 )}
@@ -517,7 +617,7 @@ function ReviewPage() {
                     <>
                       <Button
                         onClick={() => setConfirm("approve")}
-                        disabled={!isYourTurn}
+                        disabled={!isYourTurn || !comment.trim()}
                         className="h-11 text-sm font-semibold"
                       >
                         <Check className="mr-2 h-4 w-4" /> Approve document
@@ -567,7 +667,7 @@ function ReviewPage() {
         }
         description={
           confirm === "approve"
-            ? "This will forward to the next approver or finalize the document."
+            ? "Your comment will be recorded with this approval."
             : confirm === "reject"
               ? "This will reject the document. A reason is required."
               : "The document will be returned to the owner for correction. A reason is required."

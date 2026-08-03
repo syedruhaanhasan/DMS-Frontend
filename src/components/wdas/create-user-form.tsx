@@ -36,7 +36,6 @@ export function CreateUserForm({
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
-  const [title, setTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [userTypeId, setUserTypeId] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
@@ -90,7 +89,6 @@ export function CreateUserForm({
     setPassword("");
     setDisplayName("");
     setEmail("");
-    setTitle("");
     const maker = rolesQ.data?.find((r) => r.code === "MakerOwner") ?? rolesQ.data?.[0];
     setRoleIds(maker ? [maker.id] : []);
     setDepartmentId(departments.data?.[0]?.id ?? "");
@@ -100,6 +98,10 @@ export function CreateUserForm({
   const submit = async () => {
     if (!username.trim() || !displayName.trim() || !email.trim() || !departmentId) {
       toast.error("Please fill all required fields.");
+      return;
+    }
+    if (/\s/.test(username)) {
+      toast.error("Username cannot contain spaces.");
       return;
     }
     if (!isAdAccount && !password) {
@@ -127,7 +129,7 @@ export function CreateUserForm({
         password: isAdAccount ? undefined : password,
         displayName: displayName.trim(),
         email: email.trim(),
-        title: title.trim() || "Staff",
+        title: "Staff",
         departmentId,
         roleIds,
         accountType,
@@ -165,7 +167,13 @@ export function CreateUserForm({
         </div>
         <div className="space-y-2">
           <Label>Username *</Label>
-          <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="jsmith" />
+          <Input
+            value={username}
+            onChange={(e) => setUsername(e.target.value.replace(/\s+/g, ""))}
+            placeholder="jsmith"
+            autoComplete="username"
+          />
+          <p className="text-xs text-muted-foreground">No spaces allowed.</p>
         </div>
         {!isAdAccount && (
           <div className="space-y-2">
@@ -181,10 +189,6 @@ export function CreateUserForm({
           <Label>Email *</Label>
           <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           {emailError && <p className="text-xs text-destructive">{emailError}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label>Title</Label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Staff" />
         </div>
         <div className="space-y-2">
           <Label>Department *</Label>

@@ -1,6 +1,6 @@
 const TOKEN_KEY = "wdas.token";
 
-/** Empty in dev (Vite proxies /api → backend). Set to e.g. http://localhost:5110 when frontend and API are on different origins. */
+/** Empty in dev (Vite proxies /api → backend). Set to e.g. https://localhost:5110 when frontend and API are on different origins. */
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 export function apiPath(path: string): string {
@@ -89,11 +89,11 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new ApiError(
-        "Request timed out. Is the backend running? Start it with: dotnet run --project backend/src/WDAS.Api/WDAS.Api.csproj --urls http://localhost:5110",
+        "Request timed out. Is the backend running? Start it with: dotnet run --project backend/src/WDAS.Api/WDAS.Api.csproj --urls https://localhost:5110",
         0,
       );
     }
-    throw new ApiError("Cannot reach the API. Is the backend running on http://localhost:5110?", 0);
+    throw new ApiError("Cannot reach the API. Is the backend running on https://localhost:5110?", 0);
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener("abort", onAbort);
@@ -142,7 +142,7 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
     if (err instanceof Error && err.name === "AbortError") {
       throw new ApiError("Upload timed out. Check that the backend is running.", 0);
     }
-    throw new ApiError("Cannot reach the API. Is the backend running on http://localhost:5110?", 0);
+    throw new ApiError("Cannot reach the API. Is the backend running on https://localhost:5110?", 0);
   } finally {
     clearTimeout(timeout);
   }

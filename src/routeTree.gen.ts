@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReviewInboxRouteImport } from './routes/review-inbox'
 import { Route as RepositoryRouteImport } from './routes/repository'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as NotificationsRouteImport } from './routes/notifications'
@@ -44,6 +45,11 @@ import { Route as DocumentsIdEditRouteImport } from './routes/documents.$id.edit
 import { Route as ConfigWorkflowsNewRouteImport } from './routes/config.workflows.new'
 import { Route as ConfigWorkflowsIdRouteImport } from './routes/config.workflows.$id'
 
+const ReviewInboxRoute = ReviewInboxRouteImport.update({
+  id: '/review-inbox',
+  path: '/review-inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RepositoryRoute = RepositoryRouteImport.update({
   id: '/repository',
   path: '/repository',
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof NotificationsRoute
   '/reports': typeof ReportsRoute
   '/repository': typeof RepositoryRoute
+  '/review-inbox': typeof ReviewInboxRoute
   '/config/active-directory': typeof ConfigActiveDirectoryRoute
   '/config/approval-modes': typeof ConfigApprovalModesRoute
   '/config/departments': typeof ConfigDepartmentsRoute
@@ -261,6 +268,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof NotificationsRoute
   '/reports': typeof ReportsRoute
   '/repository': typeof RepositoryRoute
+  '/review-inbox': typeof ReviewInboxRoute
   '/config/active-directory': typeof ConfigActiveDirectoryRoute
   '/config/approval-modes': typeof ConfigApprovalModesRoute
   '/config/departments': typeof ConfigDepartmentsRoute
@@ -298,6 +306,7 @@ export interface FileRoutesById {
   '/notifications': typeof NotificationsRoute
   '/reports': typeof ReportsRoute
   '/repository': typeof RepositoryRoute
+  '/review-inbox': typeof ReviewInboxRoute
   '/config/active-directory': typeof ConfigActiveDirectoryRoute
   '/config/approval-modes': typeof ConfigApprovalModesRoute
   '/config/departments': typeof ConfigDepartmentsRoute
@@ -336,6 +345,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/reports'
     | '/repository'
+    | '/review-inbox'
     | '/config/active-directory'
     | '/config/approval-modes'
     | '/config/departments'
@@ -372,6 +382,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/reports'
     | '/repository'
+    | '/review-inbox'
     | '/config/active-directory'
     | '/config/approval-modes'
     | '/config/departments'
@@ -408,6 +419,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/reports'
     | '/repository'
+    | '/review-inbox'
     | '/config/active-directory'
     | '/config/approval-modes'
     | '/config/departments'
@@ -445,6 +457,7 @@ export interface RootRouteChildren {
   NotificationsRoute: typeof NotificationsRoute
   ReportsRoute: typeof ReportsRoute
   RepositoryRoute: typeof RepositoryRoute
+  ReviewInboxRoute: typeof ReviewInboxRoute
   ConfigActiveDirectoryRoute: typeof ConfigActiveDirectoryRoute
   ConfigApprovalModesRoute: typeof ConfigApprovalModesRoute
   ConfigDepartmentsRoute: typeof ConfigDepartmentsRoute
@@ -471,6 +484,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/review-inbox': {
+      id: '/review-inbox'
+      path: '/review-inbox'
+      fullPath: '/review-inbox'
+      preLoaderRoute: typeof ReviewInboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/repository': {
       id: '/repository'
       path: '/repository'
@@ -748,6 +768,7 @@ const rootRouteChildren: RootRouteChildren = {
   NotificationsRoute: NotificationsRoute,
   ReportsRoute: ReportsRoute,
   RepositoryRoute: RepositoryRoute,
+  ReviewInboxRoute: ReviewInboxRoute,
   ConfigActiveDirectoryRoute: ConfigActiveDirectoryRoute,
   ConfigApprovalModesRoute: ConfigApprovalModesRoute,
   ConfigDepartmentsRoute: ConfigDepartmentsRoute,
@@ -774,13 +795,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

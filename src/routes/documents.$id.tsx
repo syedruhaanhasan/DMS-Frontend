@@ -39,6 +39,7 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
+import { downloadHtmlAsPdf } from "@/lib/wdas/download-html-pdf";
 import type { Document, Priority } from "@/lib/wdas/types";
 
 export const Route = createFileRoute("/documents/$id")({
@@ -62,7 +63,7 @@ function isBodyEmpty(html: string): boolean {
 
 function DetailPage() {
   const { id } = Route.useParams();
-  const { user } = useSession();
+  const { user, role } = useSession();
   const { users } = useUsers();
   const qc = useQueryClient();
   const router = useRouter();
@@ -127,6 +128,11 @@ function DetailPage() {
   const canSendForApproval = doc.ownerId === user.id && isPendingCreatorSend;
   const canDelete = doc.ownerId === user.id && (isDraft || isCancelled);
   const canUpdate = doc.ownerId === user.id && (isRejected || isReturned || isDraft);
+  const canDownloadDoc =
+    String(doc.ownerId) === String(user.id) ||
+    role === "super_admin" ||
+    role === "auditor" ||
+    (doc.downloadAllowedUserIds ?? []).map(String).includes(String(user.id));
 
   const completedReviewerNotes = (doc.reviewers ?? []).filter(
     (reviewer) => reviewer.reviewComment?.trim() && reviewer.reviewedAt,
@@ -264,7 +270,7 @@ function DetailPage() {
   const downloadArchive = async (format: "pdf" | "html") => {
     if (!doc.archiveDocumentId) return;
     try {
-      await wdas.downloadArchive(doc.archiveDocumentId, format);
+      await wdas.downloadArchive(doc.archiveDocumentId, format, doc.subject.trim() || undefined);
       toast.success(format === "pdf" ? "PDF archive downloaded" : "HTML archive downloaded");
     } catch (e) {
       toast.error((e as Error).message);
@@ -424,6 +430,29 @@ function DetailPage() {
             )}
             {!showEditor && (
               <>
+                {canDownloadDoc && !isFinalized && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void downloadHtmlAsPdf({
+                        title: doc.subject,
+                        html: doc.body || "<p></p>",
+                        meta: [
+                          { label: "Owner", value: owner?.name ?? "" },
+                          { label: "Ref", value: doc.refId ?? doc.id },
+                          { label: "Status", value: doc.status },
+                        ],
+                        fileName: doc.subject.trim() || "document",
+                      }).then(
+                        () => toast.success("PDF downloaded"),
+                        (e) => toast.error((e as Error).message || "Could not download PDF"),
+                      );
+                    }}
+                  >
+                    <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
+                  </Button>
+                )}
                 <PriorityBadge priority={doc.priority} />
                 <StatusBadge status={doc.status} />
                 <SlaBadge sla={doc.sla} />
@@ -465,7 +494,7 @@ function DetailPage() {
           <span className="flex-1">
             This document is finalized and locked. Contents are read-only and immutable.
           </span>
-          {doc.archiveDocumentId && (
+          {doc.archiveDocumentId && canDownloadDoc && (
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => downloadArchive("pdf")}>
                 <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
@@ -474,6 +503,9 @@ function DetailPage() {
                 HTML
               </Button>
             </div>
+          )}
+          {doc.archiveDocumentId && !canDownloadDoc && (
+            <span className="text-xs text-muted-foreground">Download not permitted for your account.</span>
           )}
         </div>
       )}
@@ -554,7 +586,7 @@ function DetailPage() {
                   ref={editorRef}
                   contentEditable
                   suppressContentEditableWarning
-                  className="prose prose-sm min-h-[520px] max-w-none rounded-md border bg-background p-6 focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="wysiwyg-content min-h-[520px] max-w-none rounded-md border bg-background p-6 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   onInput={() => {
                     const html = editorRef.current?.innerHTML ?? "";
                     setEditBody(isBodyEmpty(html) ? "" : html);
@@ -572,7 +604,7 @@ function DetailPage() {
                     </p>
                   </div>
                   <div
-                    className="prose prose-sm max-w-none [&_p]:my-3"
+                    className="wysiwyg-content text-sm"
                     dangerouslySetInnerHTML={{ __html: doc.body }}
                   />
                 </article>

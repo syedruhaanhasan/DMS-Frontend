@@ -25,7 +25,6 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [title, setTitle] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [userTypeId, setUserTypeId] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
@@ -58,7 +57,6 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
     setDisplayName(user.name ?? "");
     setEmail(user.email ?? "");
     setPhone(user.phone ?? "");
-    setTitle(user.designation ?? "");
     setDepartmentId(user.departmentId ?? "");
     setUserTypeId(user.userTypeId ?? "");
     setRoleIds(user.roleIds?.length ? [...user.roleIds] : []);
@@ -77,6 +75,10 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
       toast.error("Please fill all required fields.");
       return;
     }
+    if (/\s/.test(username)) {
+      toast.error("Username cannot contain spaces.");
+      return;
+    }
     if (!isValidEmail(email)) {
       toast.error("Please enter a valid email address (e.g. name@company.com).");
       return;
@@ -93,7 +95,7 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
         displayName: displayName.trim(),
         email: email.trim(),
         phone: phone.trim() || null,
-        title: title.trim() || "Staff",
+        title: user.designation?.trim() || "Staff",
         departmentId,
         roleIds,
         isActive,
@@ -123,7 +125,13 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Username *</Label>
-              <Input value={username} onChange={(e) => setUsername(e.target.value)} disabled={saving} />
+              <Input
+                value={username}
+                onChange={(e) => setUsername(e.target.value.replace(/\s+/g, ""))}
+                disabled={saving}
+                autoComplete="username"
+              />
+              <p className="text-xs text-muted-foreground">No spaces allowed.</p>
             </div>
             <div className="space-y-2">
               <Label>Display name *</Label>
@@ -137,10 +145,6 @@ export function EditUserSheet({ user, open, onOpenChange, onSaved }: EditUserShe
             <div className="space-y-2">
               <Label>Phone</Label>
               <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Optional" disabled={saving} />
-            </div>
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Staff" disabled={saving} />
             </div>
             <div className="space-y-2">
               <Label>Department *</Label>

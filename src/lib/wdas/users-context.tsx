@@ -19,7 +19,7 @@ export function UsersProvider({ children, enabled = true }: { children: ReactNod
   const { isAuthed } = useSession();
   const q = useQuery({
     queryKey: ["users", "directory"],
-    queryFn: () => wdasConfig.listUsers({ isActive: true }),
+    queryFn: () => wdasConfig.listReviewers({ excludeSelf: false }).catch(() => wdasConfig.listUsers({ isActive: true })),
     enabled: enabled && isAuthed && !!getToken(),
     staleTime: 5 * 60_000,
     retry: 1,

@@ -9,6 +9,7 @@ import {
   toApiDocStatus,
   toApiPriority,
 } from "@/lib/api/mappers";
+import { attachmentSizeError } from "@/lib/wdas/attachment-limits";
 import type { Document, DocStatus, Priority, Workflow } from "@/lib/wdas/types";
 import type { User } from "@/lib/wdas/types";
 
@@ -112,7 +113,7 @@ export const wdas = {
   },
 
   listRepositoryDocuments: async (): Promise<Document[]> => {
-    const result = await api.get<ApiSearchResultDto>("/api/repository/documents?Take=100");
+    const result = await api.get<ApiSearchResultDto>("/api/repository/documents?Take=200");
     return result.items.map(mapSearchItem);
   },
 
@@ -174,12 +175,15 @@ export const wdas = {
       priority,
       recipients,
       adHocApproverUserIds: input.toIds,
+      downloadAllowedUserIds: input.downloadAllowedUserIds ?? [],
       submit: shouldDeferSubmit ? false : submit,
       idempotencyKey: null,
     });
 
     await Promise.all(
       pendingFiles.map(async (file) => {
+        const sizeError = attachmentSizeError(file);
+        if (sizeError) throw new Error(sizeError);
         const form = new FormData();
         form.append("file", file);
         await apiUpload<ApiAttachmentDto>(`/api/documents/${dto.id}/attachments`, form);
@@ -201,6 +205,8 @@ export const wdas = {
   },
 
   uploadAttachment: async (documentId: string, file: File) => {
+    const sizeError = attachmentSizeError(file);
+    if (sizeError) throw new Error(sizeError);
     const form = new FormData();
     form.append("file", file);
     return mapAttachment(await apiUpload<ApiAttachmentDto>(`/api/documents/${documentId}/attachments`, form));
@@ -272,7 +278,7 @@ export const wdas = {
     return api.post<ApiRepositoryDocumentDto>(`/api/documents/${id}/finalize`, { comment: comment ?? null });
   },
 
-  downloadArchive: async (archiveId: string, format: "pdf" | "html" = "pdf") => {
+  downloadArchive: async (archiveId: string, format: "pdf" | "html" = "pdf", fileName?: string) => {
     const token = (await import("@/lib/api/client")).getToken();
     const res = await fetch((await import("@/lib/api/client")).apiPath(`/api/repository/${archiveId}/download?format=${format}`), {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -282,7 +288,12 @@ export const wdas = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${archiveId}.${format === "pdf" ? "pdf" : "html"}`;
+    const safeName = (fileName ?? archiveId)
+      .trim()
+      .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "")
+      .replace(/\s+/g, "-")
+      .slice(0, 80) || archiveId;
+    a.download = `${safeName}.${format === "pdf" ? "pdf" : "html"}`;
     a.click();
     URL.revokeObjectURL(url);
   },
@@ -310,6 +321,8 @@ export const wdas = {
       priority: Priority;
       toNames?: string[];
       directoryUsers?: User[];
+      downloadAllowedUserIds?: string[];
+      reviewerIds?: string[];
     },
     submit: boolean,
     pendingFiles: File[] = [],
@@ -329,12 +342,15 @@ export const wdas = {
       priority,
       recipients: null,
       adHocApproverUserIds: null,
+      downloadAllowedUserIds: input.downloadAllowedUserIds ?? [],
       submit: shouldDeferSubmit ? false : submit,
       idempotencyKey: null,
     });
 
     await Promise.all(
       pendingFiles.map(async (file) => {
+        const sizeError = attachmentSizeError(file);
+        if (sizeError) throw new Error(sizeError);
         const form = new FormData();
         form.append("file", file);
         await apiUpload<ApiAttachmentDto>(`/api/documents/${id}/attachments`, form);

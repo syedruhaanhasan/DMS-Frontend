@@ -1,6 +1,6 @@
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
   return (
-    <div className="relative border-b border-border bg-[#FAFAF7] px-6 py-6 sm:px-8">
+    <div className="relative border-b border-border bg-muted/40 px-6 py-6 dark:bg-background sm:px-8">
       <div className="relative z-10 mx-auto flex max-w-[1600px] flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 h-1 w-8 rounded-full bg-primary" />

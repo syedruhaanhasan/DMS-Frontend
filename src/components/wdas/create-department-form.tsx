@@ -32,11 +32,11 @@ export function CreateDepartmentForm({ onCreated }: CreateDepartmentFormProps) {
 
   const submit = async () => {
     if (!name.trim() || !code.trim()) {
-      toast.error("Department name and code are required.");
+      toast.error("Department name and prefix are required.");
       return;
     }
     if (code.trim().length < 2) {
-      toast.error("Department code must be at least 2 characters.");
+      toast.error("Department prefix must be at least 2 characters.");
       return;
     }
 
@@ -72,7 +72,7 @@ export function CreateDepartmentForm({ onCreated }: CreateDepartmentFormProps) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="dept-code">Code *</Label>
+          <Label htmlFor="dept-code">Prefix *</Label>
           <Input
             id="dept-code"
             value={code}
@@ -81,7 +81,7 @@ export function CreateDepartmentForm({ onCreated }: CreateDepartmentFormProps) {
             maxLength={20}
             disabled={saving}
           />
-          <p className="text-xs text-muted-foreground">Short unique code (e.g. HR, OPS, LEG)</p>
+          <p className="text-xs text-muted-foreground">Short unique prefix (e.g. HR, OPS, LEG)</p>
         </div>
         <div className="space-y-2 sm:col-span-2">
           <Label>Parent department (optional)</Label>

@@ -73,11 +73,7 @@ function Login() {
       router.navigate({ to: "/dashboard" });
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 0 || err.message.includes("Failed to fetch")) {
-          setError("Cannot reach the API. Start the backend with: dotnet run --project src/WDAS.Api");
-        } else {
-          setError(err.message);
-        }
+        setError(err.message);
       } else {
         setError((err as Error).message || "Sign in failed. Check your credentials and try again.");
       }
@@ -147,11 +143,11 @@ function Login() {
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Email or Employee ID</Label>
+                  <Label htmlFor="username" className="text-[#111114]">Email or Employee ID</Label>
                   <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="name@organization.com" disabled={loading} autoFocus className="h-11" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password" className="text-[#111114]">Password</Label>
                   <div className="relative">
                     <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••" disabled={loading} className="h-11 pr-11" />
                     <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-[#6B6B70] hover:text-[#111114]" aria-label={showPassword ? "Hide password" : "Show password"}>

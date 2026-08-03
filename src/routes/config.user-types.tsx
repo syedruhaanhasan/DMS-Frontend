@@ -154,7 +154,7 @@ function UserTypesPage() {
                   <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="e.g. Permanent" disabled={creating} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Code</Label>
+                  <Label>Prefix</Label>
                   <Input value={createCode} onChange={(e) => setCreateCode(e.target.value)} placeholder="e.g. Permanent" disabled={creating} />
                 </div>
                 <div className="space-y-2 sm:col-span-2">

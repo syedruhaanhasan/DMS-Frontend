@@ -303,6 +303,7 @@ export function mapDocument(
       reviewedAt: r.reviewedAtUtc ?? undefined,
       reviewComment: r.reviewComment ?? undefined,
     })),
+    downloadAllowedUserIds: (dto.downloadAllowedUserIds ?? []).map(apiId),
     refId: documentRefId(dto.recordNumber),
     recordNumber: dto.recordNumber,
     revisionNumber: dto.revisionNumber && dto.revisionNumber > 0 ? dto.revisionNumber : 1,
@@ -339,6 +340,27 @@ export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: str
 
 export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
   const submitted = dto.submittedAtUtc ?? new Date().toISOString();
+  const actions = dto.actions ?? [];
+  const steps = actions.map((a, index) => {
+    const actionType = (a.actionType ?? "").toLowerCase();
+    const status =
+      actionType.includes("reject") ? "rejected" as const
+      : actionType.includes("return") ? "returned" as const
+      : actionType.includes("approve") ? "approved" as const
+      : actionType.includes("skip") ? "skipped" as const
+      : "approved" as const;
+    return {
+      id: `${apiId(dto.documentId)}-action-${index}`,
+      approverId: apiId(a.actorUserId),
+      order: index + 1,
+      status,
+      actedAt: a.actionAtUtc,
+      comment: a.comment ?? undefined,
+      actorName: a.actorDisplayName,
+      actionType: a.actionType,
+    };
+  });
+
   return {
     id: apiId(dto.documentId),
     refId: documentRefId(dto.recordNumber),
@@ -357,7 +379,7 @@ export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
     submittedAt: dto.submittedAtUtc ?? undefined,
     daysPending: dto.submittedAtUtc ? daysSince(dto.submittedAtUtc) : 0,
     sla: "on_time",
-    steps: [],
+    steps,
     attachments: [],
     reviewers: [],
   };

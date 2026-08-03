@@ -158,7 +158,7 @@ function EditDocumentPage() {
                 ref={editorRef}
                 contentEditable
                 suppressContentEditableWarning
-                className="min-h-[220px] rounded-md border bg-background p-3 prose prose-sm max-w-none focus:outline-none focus:ring-2 focus:ring-ring"
+                className="wysiwyg-content min-h-[220px] rounded-md border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 onInput={() => {
                   const html = editorRef.current?.innerHTML ?? "";
                   setBody(isBodyEmpty(html) ? "" : html);

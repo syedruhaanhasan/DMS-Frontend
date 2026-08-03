@@ -276,6 +276,15 @@ export const wdasConfig = {
     return list;
   },
 
+  /** Active users for reviewer / approver / download ACL pickers (aligned with mobile). */
+  listReviewers: async (opts?: { query?: string; excludeSelf?: boolean }): Promise<User[]> => {
+    const qs = new URLSearchParams();
+    if (opts?.query) qs.set("query", opts.query);
+    if (opts?.excludeSelf === false) qs.set("excludeSelf", "false");
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return (await api.get<ApiUserSummaryDto[]>(`/api/users/reviewers${suffix}`)).map(mapUser);
+  },
+
   syncDirectory: async () => {
     const res = await api.post<ApiSyncResultDto>("/api/auth/sync");
     return { updated: res.usersSynced, disabled: 0, added: 0 };

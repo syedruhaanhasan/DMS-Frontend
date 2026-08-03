@@ -5,6 +5,7 @@ export const P = {
     dashboard: "nav.dashboard",
     deptDashboard: "nav.dept_dashboard",
     inbox: "nav.inbox",
+    reviewInbox: "nav.review_inbox",
     documents: "nav.documents",
     documentsNew: "nav.documents_new",
     repository: "nav.repository",
@@ -79,7 +80,8 @@ export const PERMISSION_GROUPS: { group: string; items: { key: string; label: st
       { key: P.nav.dashboard, label: "Dashboard" },
       { key: P.nav.deptDashboard, label: "Department dashboard" },
       { key: P.nav.inbox, label: "Approval inbox" },
-      { key: P.nav.documents, label: "My documents" },
+      { key: P.nav.reviewInbox, label: "Reviewer inbox" },
+      { key: P.nav.documents, label: "Documents" },
       { key: P.nav.documentsNew, label: "New document" },
       { key: P.nav.repository, label: "Repository" },
       { key: P.nav.reports, label: "Reports" },
@@ -113,6 +115,7 @@ export const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: "/config", permission: P.nav.config },
   { prefix: "/dashboard/department", permission: P.nav.deptDashboard },
   { prefix: "/inbox", permission: P.nav.inbox },
+  { prefix: "/review-inbox", permission: P.nav.reviewInbox },
   { prefix: "/documents/new", permission: P.nav.documentsNew },
   { prefix: "/documents", permission: P.nav.documents },
   { prefix: "/repository", permission: P.nav.repository },
@@ -187,11 +190,16 @@ export function expandImpliedPermissions(keys: string[]): string[] {
   if (set.has(P.actions.documentsCreate) || set.has(P.actions.documentsFinalize) || set.has(P.actions.documentsCancel)) {
     set.add(P.nav.documents);
     set.add(P.nav.documentsNew);
+    set.add(P.nav.reviewInbox);
     set.add(P.nav.dashboard);
   }
   if (set.has(P.actions.documentsApprove)) {
     set.add(P.nav.inbox);
+    set.add(P.nav.reviewInbox);
     set.add(P.nav.dashboard);
+  }
+  if (set.has(P.nav.documents) || set.has(P.nav.inbox)) {
+    set.add(P.nav.reviewInbox);
   }
   if (set.has(P.actions.delegationManage) || set.has(P.config.delegationMake) || set.has(P.config.delegationCheck)) {
     set.add(P.nav.settings);
@@ -200,6 +208,7 @@ export function expandImpliedPermissions(keys: string[]): string[] {
   if (
     set.has(P.nav.deptDashboard) ||
     set.has(P.nav.inbox) ||
+    set.has(P.nav.reviewInbox) ||
     set.has(P.nav.documents) ||
     set.has(P.nav.documentsNew) ||
     set.has(P.nav.repository) ||

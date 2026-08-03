@@ -227,6 +227,7 @@ export interface ApiDocumentDto {
   finalizedAtUtc: string | null;
   cancellationReason: string | null;
   adHocApproverUserIds?: string[] | null;
+  downloadAllowedUserIds?: string[] | null;
   recipients: ApiDocumentRecipientDto[];
   workflowSteps: ApiWorkflowStepDto[];
 }
@@ -270,6 +271,15 @@ export interface ApiSuccessMetricsDto {
   documentsSubmittedLast30Days: number;
 }
 
+export interface ApiHistoryActionDto {
+  actionType: string;
+  actorUserId: string;
+  actorDisplayName: string;
+  comment: string | null;
+  actionAtUtc: string;
+  stepApproverUserId?: string | null;
+}
+
 export interface ApiSearchResultItemDto {
   documentId: string;
   recordNumber: number;
@@ -281,6 +291,7 @@ export interface ApiSearchResultItemDto {
   amount: number | null;
   submittedAtUtc: string | null;
   snippet: string;
+  actions?: ApiHistoryActionDto[] | null;
 }
 
 export interface ApiSearchResultDto {

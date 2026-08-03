@@ -189,7 +189,7 @@ function DepartmentManagementPage() {
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} disabled={saving} />
             </div>
             <div className="space-y-2">
-              <Label>Code</Label>
+              <Label>Prefix</Label>
               <Input value={editCode} onChange={(e) => setEditCode(e.target.value)} disabled={saving} className="font-mono uppercase" />
             </div>
             <label className="flex items-center gap-2 text-sm">

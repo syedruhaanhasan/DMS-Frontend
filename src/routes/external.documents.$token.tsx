@@ -45,10 +45,13 @@ function ExternalDocumentView() {
   const owner = useUserById(q.data?.ownerId);
 
   const run = async (action: "approve" | "reject") => {
-    if (action === "reject" && !comment.trim()) return;
+    if (!comment.trim()) {
+      toast.error("A comment is required before you can approve or reject.");
+      return;
+    }
     if (!docId) return;
     try {
-      await wdas.actOnDocument(docId, action, comment);
+      await wdas.actOnDocument(docId, action, comment.trim());
       toast.success(action === "approve" ? "Approval submitted" : "Rejection submitted", {
         description: "Your response has been recorded.",
       });
@@ -104,7 +107,7 @@ function ExternalDocumentView() {
             )}
             <div>
               <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Document body</p>
-              <div className="prose prose-sm max-w-none rounded-md border bg-card p-3 text-sm" dangerouslySetInnerHTML={{ __html: doc.body }} />
+              <div className="wysiwyg-content rounded-md border bg-card p-3 text-sm" dangerouslySetInnerHTML={{ __html: doc.body }} />
             </div>
             {doc.attachments.length > 0 && (
               <div>
@@ -130,12 +133,24 @@ function ExternalDocumentView() {
               </div>
             )}
             <div className="space-y-2 border-t pt-4">
-              <Label htmlFor="comment">Comment (required for rejection)</Label>
-              <Textarea id="comment" value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Add context for your decision…" />
+              <Label htmlFor="comment">
+                Comment <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="comment"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={3}
+                placeholder="Comment is required for approve or reject…"
+              />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button className="flex-1" onClick={() => setConfirm("approve")}><Check className="mr-1 h-4 w-4" /> Approve</Button>
-              <Button variant="destructive" className="flex-1" onClick={() => setConfirm("reject")}><X className="mr-1 h-4 w-4" /> Reject</Button>
+              <Button className="flex-1" disabled={!comment.trim()} onClick={() => setConfirm("approve")}>
+                <Check className="mr-1 h-4 w-4" /> Approve
+              </Button>
+              <Button variant="destructive" className="flex-1" disabled={!comment.trim()} onClick={() => setConfirm("reject")}>
+                <X className="mr-1 h-4 w-4" /> Reject
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -145,10 +160,10 @@ function ExternalDocumentView() {
         open={!!confirm}
         onOpenChange={(o) => !o && setConfirm(null)}
         title={confirm === "approve" ? "Approve this document?" : "Reject this document?"}
-        description={confirm === "approve" ? "This will record your approval." : "This will reject the document and notify the owner."}
+        description={confirm === "approve" ? "Your comment will be recorded with this approval." : "This will reject the document and notify the owner."}
         confirmLabel={confirm === "approve" ? "Approve" : "Reject"}
         variant={confirm === "approve" ? "success" : "destructive"}
-        requireReason={confirm === "reject"}
+        requireReason={false}
         onConfirm={() => confirm && run(confirm)}
       />
     </ExternalShell>

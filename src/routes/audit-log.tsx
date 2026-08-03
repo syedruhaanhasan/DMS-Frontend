@@ -10,7 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LoadingState, ErrorState, EmptyState } from "@/components/wdas/data-states";
-import { ShieldCheck, ShieldAlert, ScrollText, Download, Search } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  ScrollText,
+  Download,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { ApiAuditLogEntryDto } from "@/lib/api/types";
 import { formatAuditDetails, auditDetailsSearchText } from "@/lib/wdas/audit-details";
@@ -18,6 +26,8 @@ import { formatAuditDetails, auditDetailsSearchText } from "@/lib/wdas/audit-det
 export const Route = createFileRoute("/audit-log")({
   component: AuditLogPage,
 });
+
+const PAGE_SIZE = 10;
 
 function eventTone(eventType: string): string {
   const e = eventType.toLowerCase();
@@ -36,6 +46,7 @@ function AuditLogPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [term, setTerm] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (!allowed) router.navigate({ to: "/dashboard" });
@@ -61,6 +72,19 @@ function AuditLogPage() {
         .some((v) => String(v).toLowerCase().includes(t)),
     );
   }, [q.data, term]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [fromDate, toDate, term]);
+
+  const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageEntries = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return entries.slice(start, start + PAGE_SIZE);
+  }, [entries, currentPage]);
+  const rangeStart = entries.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, entries.length);
 
   const doExport = () => {
     const rows = q.data?.entries ?? [];
@@ -183,7 +207,7 @@ function AuditLogPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {entries.map((e) => (
+                    {pageEntries.map((e) => (
                       <tr key={e.sequenceNumber} className="border-b last:border-0">
                         <td className="px-4 py-3 font-mono tabular-nums text-muted-foreground">{e.sequenceNumber}</td>
                         <td className="whitespace-nowrap px-4 py-3 tabular-nums text-muted-foreground">
@@ -211,9 +235,41 @@ function AuditLogPage() {
           </CardContent>
         </Card>
 
-        {q.data && (
+        {q.data && entries.length > 0 && (
+          <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Showing {rangeStart}–{rangeEnd} of {entries.length} entries · {PAGE_SIZE} per page · read-only, retained for
+              compliance.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Previous
+              </Button>
+              <span className="min-w-[7rem] text-center text-sm tabular-nums text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {q.data && entries.length === 0 && (
           <p className="text-center text-xs text-muted-foreground">
-            Showing {entries.length} of {q.data.entries.length} entries · read-only, retained for compliance.
+            Showing 0 of {q.data.entries.length} entries · read-only, retained for compliance.
           </p>
         )}
       </div>

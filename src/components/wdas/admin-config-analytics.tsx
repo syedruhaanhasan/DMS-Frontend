@@ -93,7 +93,7 @@ export function AdminConfigAnalytics() {
       value: users.length,
       detail: `${users.filter((user) => user.isActive !== false).length} active`,
       icon: Users,
-      color: "text-amber-600",
+      color: "text-amber-600 dark:text-amber-400",
       background: "from-amber-500/15 to-amber-500/5",
     },
     {
@@ -109,7 +109,7 @@ export function AdminConfigAnalytics() {
       value: workflows.length,
       detail: `${workflows.filter((workflow) => workflow.isActive !== false).length} active`,
       icon: Workflow,
-      color: "text-amber-600",
+      color: "text-amber-600 dark:text-amber-400",
       background: "from-amber-500/15 to-orange-500/5",
     },
   ];
