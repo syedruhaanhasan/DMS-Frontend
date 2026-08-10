@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import type { ApiAuditLogEntryDto } from "@/lib/api/types";
 import { formatAuditDetails, auditDetailsSearchText } from "@/lib/wdas/audit-details";
+import { parseApiDate } from "@/lib/wdas/format";
 
 export const Route = createFileRoute("/audit-log")({
   component: AuditLogPage,
@@ -211,7 +212,7 @@ function AuditLogPage() {
                       <tr key={e.sequenceNumber} className="border-b last:border-0">
                         <td className="px-4 py-3 font-mono tabular-nums text-muted-foreground">{e.sequenceNumber}</td>
                         <td className="whitespace-nowrap px-4 py-3 tabular-nums text-muted-foreground">
-                          {new Date(e.createdAtUtc).toLocaleString()}
+                          {parseApiDate(e.createdAtUtc).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 font-medium">{e.actorDisplayName ?? "System"}</td>
                         <td className="px-4 py-3">

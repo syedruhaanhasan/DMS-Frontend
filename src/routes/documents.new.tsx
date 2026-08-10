@@ -60,6 +60,8 @@ function NewDoc() {
   const [downloadAllowedIds, setDownloadAllowedIds] = useState<string[]>([]);
   const [reviewerQuery, setReviewerQuery] = useState("");
   const [reviewerFocused, setReviewerFocused] = useState(false);
+  const [approverQuery, setApproverQuery] = useState("");
+  const [approverFocused, setApproverFocused] = useState(false);
   const [workflowId, setWorkflowId] = useState<string>("");
   const [amount, setAmount] = useState<string>("");
   const [amountMandatory, setAmountMandatory] = useState(false);
@@ -189,7 +191,12 @@ function NewDoc() {
           seen.add(id);
           return true;
         });
-        setToIds(next);
+        setToIds((prev) => {
+          // Keep creator-added approvers when the workflow/band refreshes.
+          const previousWorkflow = new Set(workflowApproverIds);
+          const extras = prev.filter((id) => !previousWorkflow.has(id) && !next.includes(id) && id !== user.id);
+          return [...next, ...extras];
+        });
         setWorkflowApproverIds(next);
         setReviewerIds((rev) => rev.filter((id) => !next.includes(id)));
       } catch {
@@ -306,7 +313,20 @@ function NewDoc() {
     return name.includes(q) || dept.includes(q) || email.includes(q) || designation.includes(q);
   }).slice(0, 8);
 
+  const approverCandidates = users.filter((u) => {
+    if (u.id === user.id || toIds.includes(u.id) || reviewerIds.includes(u.id)) return false;
+    if (u.isActive === false) return false;
+    if (!approverQuery.trim()) return true;
+    const q = approverQuery.toLowerCase();
+    const name = (u.name ?? "").toLowerCase();
+    const dept = (u.department ?? "").toLowerCase();
+    const email = (u.email ?? "").toLowerCase();
+    const designation = (u.designation ?? "").toLowerCase();
+    return name.includes(q) || dept.includes(q) || email.includes(q) || designation.includes(q);
+  }).slice(0, 8);
+
   const showReviewerPicker = reviewerFocused || reviewerQuery.trim().length > 0;
+  const showApproverPicker = approverFocused || approverQuery.trim().length > 0;
   const wizardSteps = [
     { number: 1, label: "Details", href: "#document-details", complete: Boolean(subject.trim() && workflowId) },
     { number: 2, label: "Content", href: "#document-content", complete: !editorEmpty },
@@ -540,24 +560,25 @@ function NewDoc() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-[11px] font-semibold text-amber-100 dark:bg-stone-700 dark:text-amber-200">3</span>
                   <div>
                     <p className="text-sm font-semibold text-stone-900 dark:text-foreground">Workflow</p>
-                    <p className="text-[11px] text-muted-foreground">Approvers come from the workflow. Add reviewers if others should review it.</p>
+                    <p className="text-[11px] text-muted-foreground">Approvers come from the workflow — you can also add more. Add reviewers if others should review first.</p>
                   </div>
                 </div>
                 <Label>Approvers</Label>
                 <p className="text-xs text-muted-foreground">
                   {workflowId
                     ? isParallel
-                      ? "Approvers are defined by the selected workflow. Tick who may download this document."
-                      : "Approvers come from the selected workflow. Tick who may download this document."
-                    : "Choose a workflow first — its configured approvers will appear here."}
+                      ? "Workflow approvers are included. You can also add more people. Tick who may download."
+                      : "Workflow approvers are included. You can also add more people outside the workflow. Tick who may download."
+                    : "Choose a workflow first — its configured approvers will appear here. You can add more after that."}
                 </p>
                 <div className="space-y-1.5 rounded-md border bg-muted/20 p-2">
                   {toIds.length === 0 && (
-                    <p className="px-1 py-1 text-sm text-muted-foreground">No approvers yet — select a workflow.</p>
+                    <p className="px-1 py-1 text-sm text-muted-foreground">No approvers yet — select a workflow or add one below.</p>
                   )}
                   {toIds.map((id, index) => {
                     const u = users.find((x) => x.id === id);
                     const canDownload = downloadAllowedIds.includes(id);
+                    const fromWorkflow = workflowApproverIds.includes(id);
                     return (
                       <div
                         key={id}
@@ -569,7 +590,25 @@ function NewDoc() {
                         <span className="min-w-0 flex-1 truncate">
                           {u?.name ?? id}
                           {u?.designation ? <span className="text-muted-foreground"> — {u.designation}</span> : null}
+                          {fromWorkflow ? (
+                            <Badge variant="outline" className="ml-2 align-middle text-[10px]">Workflow</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="ml-2 align-middle text-[10px]">Added</Badge>
+                          )}
                         </span>
+                        {!fromWorkflow && (
+                          <button
+                            type="button"
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                            aria-label="Remove approver"
+                            onClick={() => {
+                              setToIds((ids) => ids.filter((x) => x !== id));
+                              setDownloadAllowedIds((ids) => ids.filter((x) => x !== id));
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
                           <Checkbox
                             checked={canDownload}
@@ -585,7 +624,57 @@ function NewDoc() {
                       </div>
                     );
                   })}
+                  {workflowId && (
+                    <input
+                      className="min-w-[120px] w-full flex-1 border-0 bg-transparent p-1 text-sm outline-none"
+                      placeholder="Search to add another approver…"
+                      value={approverQuery}
+                      onChange={(e) => setApproverQuery(e.target.value)}
+                      onFocus={() => setApproverFocused(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setApproverFocused(false), 150);
+                      }}
+                    />
+                  )}
                 </div>
+                {workflowId && showApproverPicker && (
+                  <div className="mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover shadow">
+                    {usersLoading ? (
+                      <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading users…
+                      </p>
+                    ) : usersError ? (
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <span className="text-destructive">Could not load users.</span>
+                        <button type="button" className="text-primary hover:underline" onMouseDown={(e) => e.preventDefault()} onClick={() => refetchUsers()}>
+                          Retry
+                        </button>
+                      </div>
+                    ) : approverCandidates.length > 0 ? (
+                      approverCandidates.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setToIds((ids) => (ids.includes(u.id) ? ids : [...ids, u.id]));
+                            setReviewerIds((ids) => ids.filter((id) => id !== u.id));
+                            setApproverQuery("");
+                            setApproverFocused(true);
+                          }}
+                        >
+                          <span>{u.name} <span className="text-muted-foreground">— {u.designation || u.email}</span></span>
+                          <span className="text-xs text-muted-foreground">{u.department}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        {approverQuery.trim() ? "No matching users." : "No other active users available."}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="pt-3">
                   <Label>Reviewer</Label>
@@ -688,7 +777,7 @@ function NewDoc() {
                   <div>
                     <p className="text-xs font-medium text-foreground">Sequence chart</p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      Creator, workflow approvers, and any reviewers you add.
+                      Creator, workflow approvers, any extra approvers you add, and reviewers.
                     </p>
                   </div>
                   <ApprovalFlowChart

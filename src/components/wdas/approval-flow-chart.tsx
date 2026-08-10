@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
-import { Eye, FilePenLine, GripVertical, UserRoundCheck, Users } from "lucide-react";
+import { Eye, FilePenLine, GripVertical, UserRoundCheck, Users, XCircle } from "lucide-react";
 import { useState } from "react";
-import type { Document, User } from "@/lib/wdas/types";
+import type { ApprovalStep, Document, User } from "@/lib/wdas/types";
 
 export type ApprovalFlowNode = {
   id: string;
@@ -13,15 +13,22 @@ export type ApprovalFlowNode = {
    * The reviewer card renders immediately after that node. Defaults to the creator.
    */
   addedBy?: string;
+  /** Optional review outcome for reviewer nodes. */
+  reviewStatus?: "pending" | "done";
+  reviewComment?: string;
+  /** Approver step outcome — only the rejector is marked rejected; others stay in the full chain. */
+  approvalStatus?: ApprovalStep["status"];
 };
 
 /**
  * Builds sequence-chart nodes from a live document: creator, then the approvers in
  * step order, with each reviewer attached to whoever added them (creator or approver).
+ * Skipped steps (after a reject) stay visible so sequential routing shows the full workflow.
  */
 export function buildDocumentFlowNodes(doc: Document, users: User[]): ApprovalFlowNode[] {
   const creatorNodeId = `creator-${doc.ownerId}`;
-  const approverNodeId = (approverId: string) => `approver-${approverId}`;
+  const approverNodeId = (approverId: string, stepId?: string) =>
+    stepId ? `approver-${approverId}-${stepId}` : `approver-${approverId}`;
   const ownerUser = users.find((u) => u.id === doc.ownerId);
 
   const nodes: ApprovalFlowNode[] = [
@@ -33,31 +40,82 @@ export function buildDocumentFlowNodes(doc: Document, users: User[]): ApprovalFl
     },
   ];
 
-  const seenApprovers = new Set<string>();
-  for (const step of [...doc.steps].sort((a, b) => a.order - b.order)) {
-    if (!step.approverId || seenApprovers.has(step.approverId)) continue;
-    seenApprovers.add(step.approverId);
+  const sortedSteps = [...doc.steps].sort(
+    (a, b) => (a.approvalCycle ?? 1) - (b.approvalCycle ?? 1) || a.order - b.order,
+  );
+
+  // Map stable step-based node ids so reviewers can still attach to the right approver.
+  const stepNodeIdByStepId = new Map<string, string>();
+  const nodeIdByApproverId = new Map<string, string>();
+
+  for (const step of sortedSteps) {
+    if (!step.approverId) continue;
     const u = users.find((x) => x.id === step.approverId);
+    const nodeId = approverNodeId(step.approverId, step.id);
+    stepNodeIdByStepId.set(step.id, nodeId);
+    // Prefer the most recent / active occurrence for addedBy lookups by user id.
+    nodeIdByApproverId.set(step.approverId, nodeId);
+
+    const rejected = step.status === "rejected";
+    const sub = rejected
+      ? step.comment?.trim()
+        ? `Rejected: ${step.comment.trim()}`
+        : "Rejected"
+      : step.status === "paused"
+        ? "Waiting for reviewer"
+        : step.status === "skipped"
+          ? u?.designation || u?.department || "Not reached"
+          : u?.designation || u?.department || "Approver";
+
     nodes.push({
-      id: approverNodeId(step.approverId),
-      label: u?.name ?? step.approverId,
-      sub: u?.designation || u?.department || "Approver",
+      id: nodeId,
+      label: u?.name ?? step.actorName ?? step.approverId,
+      sub,
       role: "approver",
+      approvalStatus: step.status,
     });
   }
 
   for (const reviewer of doc.reviewers ?? []) {
-    const addedBy =
-      reviewer.addedById && reviewer.addedById !== doc.ownerId
-        ? approverNodeId(reviewer.addedById)
-        : creatorNodeId;
+    let addedBy = creatorNodeId;
+    if (reviewer.returnWorkflowStepId) {
+      const step = doc.steps.find((s) => s.id === reviewer.returnWorkflowStepId);
+      if (step && stepNodeIdByStepId.has(step.id)) {
+        addedBy = stepNodeIdByStepId.get(step.id)!;
+      } else if (reviewer.addedById && reviewer.addedById !== doc.ownerId) {
+        addedBy = nodeIdByApproverId.get(reviewer.addedById) ?? approverNodeId(reviewer.addedById);
+      }
+    } else if (reviewer.addedById && reviewer.addedById !== doc.ownerId) {
+      addedBy = nodeIdByApproverId.get(reviewer.addedById) ?? approverNodeId(reviewer.addedById);
+    }
+
+    // If parent approver node was missing, still keep the reviewer visible.
+    if (!nodes.some((n) => n.id === addedBy) && reviewer.addedById && reviewer.addedById !== doc.ownerId) {
+      const u = users.find((x) => x.id === reviewer.addedById);
+      const fallbackId = approverNodeId(reviewer.addedById);
+      nodes.push({
+        id: fallbackId,
+        label: u?.name ?? reviewer.addedById,
+        sub: u?.designation || u?.department || "Approver",
+        role: "approver",
+      });
+      addedBy = fallbackId;
+    }
+
     const u = reviewer.userId ? users.find((x) => x.id === reviewer.userId) : undefined;
+    const done = Boolean(reviewer.reviewedAt);
     nodes.push({
       id: `reviewer-${reviewer.id}`,
       label: reviewer.name || u?.name || "Reviewer",
-      sub: u?.designation || u?.department || "Reviewer",
+      sub: done
+        ? reviewer.reviewComment?.trim()
+          ? `Reviewed: ${reviewer.reviewComment.trim()}`
+          : "Review completed"
+        : u?.designation || u?.department || "Pending review",
       role: "reviewer",
       addedBy,
+      reviewStatus: done ? "done" : "pending",
+      reviewComment: reviewer.reviewComment,
     });
   }
 
@@ -148,7 +206,7 @@ export function ApprovalFlowChart({ nodes, mode = "sequential", onReorder, class
     <div className={cn("space-y-3 rounded-lg border border-amber-200 bg-white p-4 dark:border-amber-400/20 dark:bg-card", className)} aria-label="Sequence chart">
       <div className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
         <UserRoundCheck className="h-3.5 w-3.5" />
-        Sequential routing — approvers act in order, reviewers receive a copy
+        Sequential routing — approvers act in order, reviewers appear after who added them
       </div>
       {canReorder && sequence.length > 2 && (
         <p className="text-[11px] text-muted-foreground">Drag a card onto another to change the order.</p>
@@ -241,15 +299,40 @@ function FlowCard({
 }) {
   const isCreator = node.role === "creator";
   const isReviewer = node.role === "reviewer";
+  const reviewDone = node.reviewStatus === "done";
+  const isRejected = node.approvalStatus === "rejected";
+  const isSkipped = node.approvalStatus === "skipped";
+  const isApproved = node.approvalStatus === "approved";
+
+  const roleLabel = isCreator
+    ? "Creator"
+    : isReviewer
+      ? reviewDone
+        ? "Reviewed"
+        : "Reviewer"
+      : isRejected
+        ? "Rejected"
+        : parallel
+          ? "Approver"
+          : `Step ${index}`;
+
   return (
     <div
       className={cn(
-        "min-w-[140px] max-w-[200px] rounded-md border px-3 py-2 shadow-sm",
+        "min-w-[140px] max-w-[220px] rounded-md border px-3 py-2 shadow-sm",
         isCreator
           ? "border-stone-800 bg-stone-950 text-white"
           : isReviewer
-            ? "border-stone-300 bg-stone-100 dark:border-stone-700 dark:bg-stone-800"
-            : "border-amber-300 bg-amber-50 dark:border-amber-400/25 dark:bg-amber-400/10",
+            ? reviewDone
+              ? "border-violet-300 bg-violet-50 dark:border-violet-400/30 dark:bg-violet-400/10"
+              : "border-stone-300 bg-stone-100 dark:border-stone-700 dark:bg-stone-800"
+            : isRejected
+              ? "border-destructive/40 bg-destructive/10 dark:border-destructive/50 dark:bg-destructive/15"
+              : isSkipped
+                ? "border-border bg-muted/40 opacity-80"
+                : isApproved
+                  ? "border-emerald-300 bg-emerald-50 dark:border-emerald-400/30 dark:bg-emerald-400/10"
+                  : "border-amber-300 bg-amber-50 dark:border-amber-400/25 dark:bg-amber-400/10",
         parallel && !isCreator && "flex-1 basis-[140px]",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
@@ -264,23 +347,69 @@ function FlowCard({
             isCreator
               ? "bg-amber-400 text-stone-950"
               : isReviewer
-                ? "bg-stone-600 text-stone-100"
-                : "bg-stone-900 text-amber-100",
+                ? reviewDone
+                  ? "bg-violet-600 text-white"
+                  : "bg-stone-600 text-stone-100"
+                : isRejected
+                  ? "bg-destructive text-white"
+                  : isSkipped
+                    ? "bg-muted-foreground/40 text-background"
+                    : isApproved
+                      ? "bg-emerald-700 text-white"
+                      : "bg-stone-900 text-amber-100",
           )}
         >
-          {isCreator ? <FilePenLine className="h-3 w-3" /> : isReviewer ? <Eye className="h-3 w-3" /> : index}
+          {isCreator ? (
+            <FilePenLine className="h-3 w-3" />
+          ) : isReviewer ? (
+            <Eye className="h-3 w-3" />
+          ) : isRejected ? (
+            <XCircle className="h-3 w-3" />
+          ) : (
+            index
+          )}
         </span>
         <span
           className={cn(
             "text-[10px] font-medium uppercase tracking-wide",
-            isCreator ? "text-stone-300" : isReviewer ? "text-stone-500 dark:text-stone-400" : "text-amber-800 dark:text-amber-300",
+            isCreator
+              ? "text-stone-300"
+              : isReviewer
+                ? reviewDone
+                  ? "text-violet-700 dark:text-violet-300"
+                  : "text-stone-500 dark:text-stone-400"
+                : isRejected
+                  ? "text-destructive"
+                  : isSkipped
+                    ? "text-muted-foreground"
+                    : isApproved
+                      ? "text-emerald-800 dark:text-emerald-300"
+                      : "text-amber-800 dark:text-amber-300",
           )}
         >
-          {isCreator ? "Creator" : isReviewer ? "Reviewer" : parallel ? "Approver" : `Step ${index}`}
+          {roleLabel}
         </span>
       </div>
-      <p className={cn("truncate text-xs font-semibold", isCreator ? "text-white" : "text-stone-900 dark:text-stone-100")}>{node.label}</p>
-      {node.sub && <p className={cn("mt-0.5 truncate text-[11px]", isCreator ? "text-stone-300" : "text-muted-foreground")}>{node.sub}</p>}
+      <p
+        className={cn(
+          "truncate text-xs font-semibold",
+          isCreator ? "text-white" : isSkipped ? "text-muted-foreground" : "text-stone-900 dark:text-stone-100",
+        )}
+      >
+        {node.label}
+      </p>
+      {node.sub && (
+        <p
+          className={cn(
+            "mt-0.5 text-[11px]",
+            isCreator ? "text-stone-300" : isRejected ? "text-destructive/90" : "text-muted-foreground",
+            isReviewer || isRejected ? "line-clamp-3 whitespace-pre-wrap" : "truncate",
+          )}
+          title={node.sub}
+        >
+          {node.sub}
+        </p>
+      )}
     </div>
   );
 }

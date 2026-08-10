@@ -17,6 +17,7 @@ function ApprovalStepItem({ step, currentStepId }: { step: ApprovalStep; current
     : step.status === "returned" ? "bg-warning text-warning-foreground"
     : isCurrent ? "bg-info text-info-foreground ring-4 ring-info/20"
     : "bg-muted text-muted-foreground";
+  const cycleLabel = step.approvalCycle && step.approvalCycle > 1 ? ` · Round ${step.approvalCycle}` : "";
 
   return (
     <li className="relative">
@@ -27,7 +28,7 @@ function ApprovalStepItem({ step, currentStepId }: { step: ApprovalStep; current
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">{user?.name ?? "—"} <span className="font-normal text-muted-foreground">· {user?.designation}</span></p>
-            <p className="mt-1 text-xs text-muted-foreground">Step {step.order} · {user?.department}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Step {step.order}{cycleLabel} · {user?.department}</p>
           </div>
           {step.actedAt && (
             <Tooltip>
@@ -38,16 +39,26 @@ function ApprovalStepItem({ step, currentStepId }: { step: ApprovalStep; current
             </Tooltip>
           )}
         </div>
-        {step.comment && (
-          <div className="mt-3 rounded-lg border border-border/70 bg-background/70 p-3 text-sm leading-6 text-foreground/90">
-            {step.comment}
-            {step.attachmentName && (
-              <div className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Paperclip className="h-3 w-3" />
-                {step.attachmentName}
-              </div>
-            )}
-          </div>
+        {(step.actionHistory?.length
+          ? step.actionHistory
+          : step.comment
+            ? [{ id: `${step.id}-note`, actorName: undefined as string | undefined, comment: step.comment }]
+            : []
+        ).map((entry, idx) =>
+          entry.comment ? (
+            <div key={entry.id ?? `${step.id}-note-${idx}`} className="mt-3 rounded-lg border border-border/70 bg-background/70 p-3 text-sm leading-6 text-foreground/90">
+              {entry.actorName ? (
+                <p className="mb-1 text-xs font-medium text-muted-foreground">{entry.actorName}</p>
+              ) : null}
+              {entry.comment}
+              {step.attachmentName && idx === 0 && (
+                <div className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Paperclip className="h-3 w-3" />
+                  {step.attachmentName}
+                </div>
+              )}
+            </div>
+          ) : null,
         )}
         {isCurrent && !step.actedAt && <p className="mt-2 text-xs font-medium text-info">Awaiting action</p>}
       </div>
@@ -56,11 +67,12 @@ function ApprovalStepItem({ step, currentStepId }: { step: ApprovalStep; current
 }
 
 export function ApprovalTrail({ steps, currentStepId }: { steps: ApprovalStep[]; currentStepId?: string }) {
-  if (!steps.length) return <p className="text-sm text-muted-foreground">No approvers assigned.</p>;
+  const visible = steps.filter((s) => s.status !== "skipped" || Boolean(s.comment) || Boolean(s.actionHistory?.length));
+  if (!visible.length) return <p className="text-sm text-muted-foreground">No approvers assigned.</p>;
   return (
     <TooltipProvider>
       <ol className="relative space-y-4 border-l border-border/70 pl-6">
-        {steps.map((s) => (
+        {visible.map((s) => (
           <ApprovalStepItem key={s.id} step={s} currentStepId={currentStepId} />
         ))}
       </ol>

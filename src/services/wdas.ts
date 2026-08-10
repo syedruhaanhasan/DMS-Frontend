@@ -4,6 +4,7 @@ import {
   mapAttachment,
   mapDashboardItem,
   mapDocument,
+  applyDocumentRevision,
   mapSearchItem,
   mapWorkflow,
   toApiDocStatus,
@@ -131,6 +132,28 @@ export const wdas = {
       api.get<ApiAttachmentDto[]>(`/api/documents/${id}/attachments`).catch(() => [] as ApiAttachmentDto[]),
     ]);
     return mapDocument(dto, attachments.map(mapAttachment));
+  },
+
+  listDocumentRevisions: async (id: string) => {
+    return api.get<import("@/lib/api/types").ApiDocumentRevisionSummaryDto[]>(
+      `/api/documents/${id}/revisions`,
+    );
+  },
+
+  getDocumentRevision: async (id: string, revisionNumber: number) => {
+    const dto = await api.get<import("@/lib/api/types").ApiDocumentRevisionDetailDto>(
+      `/api/documents/${id}/revisions/${revisionNumber}`,
+    );
+    return dto;
+  },
+
+  /** Live document with a historical revision's content/workflow overlaid. */
+  getDocumentAtRevision: async (id: string, revisionNumber: number): Promise<Document> => {
+    const [doc, rev] = await Promise.all([
+      wdas.getDocument(id),
+      wdas.getDocumentRevision(id, revisionNumber),
+    ]);
+    return applyDocumentRevision(doc, rev);
   },
 
   createDocument: async (

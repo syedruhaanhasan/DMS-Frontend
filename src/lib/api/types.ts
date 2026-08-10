@@ -28,7 +28,8 @@ export type ApiWorkflowStepStatus =
   | "Approved"
   | "Rejected"
   | "Returned"
-  | "Skipped";
+  | "Skipped"
+  | "Paused";
 
 export type ApiWorkflowActionType = "Approve" | "Reject" | "Return" | "Comment" | "Reassign";
 
@@ -184,6 +185,7 @@ export interface ApiWorkflowStepActionDto {
 export interface ApiWorkflowStepDto {
   id: string;
   stepOrder: number;
+  approvalCycle?: number;
   approverUserId: string | null;
   approverDisplayName: string | null;
   groupName: string | null;
@@ -203,6 +205,28 @@ export interface ApiDocumentRecipientDto {
   addedById?: string | null;
   reviewedAtUtc?: string | null;
   reviewComment?: string | null;
+  returnWorkflowStepId?: string | null;
+}
+
+export interface ApiDocumentRevisionSummaryDto {
+  revisionNumber: number;
+  subject: string;
+  submittedAtUtc: string | null;
+  approvalCycle: number | null;
+  isCurrent: boolean;
+}
+
+export interface ApiDocumentRevisionDetailDto {
+  revisionNumber: number;
+  isCurrent: boolean;
+  subject: string;
+  bodyHtml: string;
+  amount: number | null;
+  priority: ApiDocumentPriority;
+  submittedAtUtc: string | null;
+  approvalCycle: number | null;
+  recipients: ApiDocumentRecipientDto[];
+  workflowSteps: ApiWorkflowStepDto[];
 }
 
 export interface ApiDocumentDto {

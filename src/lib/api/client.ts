@@ -42,7 +42,7 @@ export function setToken(token: string | null) {
 
 type RequestOptions = Omit<RequestInit, "body"> & { body?: unknown };
 
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 45_000;
 
 let onUnauthorized: (() => void) | null = null;
 

@@ -13,7 +13,7 @@ import {
   Activity, Search, CheckCircle2, XCircle, RotateCcw, FileEdit, FilePlus2,
   LogIn, Download, ShieldCheck, Send, type LucideIcon,
 } from "lucide-react";
-import { relTime } from "@/lib/wdas/format";
+import { parseApiDate, relTime } from "@/lib/wdas/format";
 import type { ApiAuditLogEntryDto } from "@/lib/api/types";
 
 export const Route = createFileRoute("/activity-log")({
@@ -39,7 +39,7 @@ function initials(name: string): string {
 }
 
 function dayLabel(iso: string): string {
-  const d = new Date(iso);
+  const d = parseApiDate(iso);
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
@@ -145,7 +145,7 @@ function ActivityLogPage() {
                                   )}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  {relTime(e.createdAtUtc)} · {new Date(e.createdAtUtc).toLocaleTimeString()}
+                                  {relTime(e.createdAtUtc)} · {parseApiDate(e.createdAtUtc).toLocaleTimeString()}
                                 </p>
                               </div>
                             </div>

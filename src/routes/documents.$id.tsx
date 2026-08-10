@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { downloadHtmlAsPdf } from "@/lib/wdas/download-html-pdf";
 import type { Document, Priority } from "@/lib/wdas/types";
+import { applyDocumentRevision, scopeDocumentToCycle } from "@/lib/api/mappers";
 
 export const Route = createFileRoute("/documents/$id")({
   component: DocumentIdLayout,
@@ -91,10 +92,31 @@ function DetailPage() {
   const [editAmount, setEditAmount] = useState("");
   const [editPriority, setEditPriority] = useState<Priority>("Normal");
   const editorRef = useRef<HTMLDivElement>(null);
+  const [selectedRev, setSelectedRev] = useState<number | null>(null);
 
   const doc = q.data;
+  const currentRev = doc?.revisionNumber && doc.revisionNumber > 0 ? doc.revisionNumber : 1;
   // Once the owner enters edit mode, keep the editor open (don't depend on status remapping).
   const showEditor = editing && !!doc;
+  const activeRev = selectedRev ?? currentRev;
+  const viewingHistorical = !showEditor && !!doc && activeRev !== currentRev;
+
+  const revisionsQ = useQuery({
+    queryKey: ["doc", id, "revisions"],
+    queryFn: () => wdas.listDocumentRevisions(id),
+    enabled: canFetch,
+  });
+  // Always load the selected version so sequential routing is version-scoped (not all cycles mixed).
+  const revisionDetailQ = useQuery({
+    queryKey: ["doc", id, "revisions", activeRev],
+    queryFn: () => wdas.getDocumentRevision(id, activeRev),
+    enabled: canFetch,
+  });
+
+  // Follow the live revision when the document or its version number changes.
+  useEffect(() => {
+    setSelectedRev(null);
+  }, [doc?.id, doc?.revisionNumber]);
 
   // Keep editor DOM in sync when entering edit mode.
   useEffect(() => {
@@ -111,6 +133,19 @@ function DetailPage() {
     const message = q.error instanceof ApiError ? q.error.message : "Document not available.";
     return <ErrorState message={message} onRetry={() => q.refetch()} />;
   }
+
+  const viewDoc = (() => {
+    if (revisionDetailQ.data) {
+      return applyDocumentRevision(doc, revisionDetailQ.data);
+    }
+    const listedCycle = revisionsQ.data?.find((r) => r.revisionNumber === activeRev)?.approvalCycle;
+    const fallbackCycle =
+      listedCycle ??
+      (activeRev === currentRev
+        ? Math.max(1, ...doc.steps.map((s) => s.approvalCycle ?? 1))
+        : activeRev);
+    return scopeDocumentToCycle(doc, fallbackCycle);
+  })();
 
   const workflow = workflowsQ.data?.find((w) => w.id === doc.workflowId);
   const isFinalized = doc.status === "approved";
@@ -134,42 +169,66 @@ function DetailPage() {
     role === "auditor" ||
     (doc.downloadAllowedUserIds ?? []).map(String).includes(String(user.id));
 
-  const completedReviewerNotes = (doc.reviewers ?? []).filter(
-    (reviewer) => reviewer.reviewComment?.trim() && reviewer.reviewedAt,
+  const completedReviewerNotes = (viewDoc.reviewers ?? []).filter(
+    (reviewer) => Boolean(reviewer.reviewedAt),
   );
 
   const activityComments = [
     ...completedReviewerNotes.map((reviewer) => ({
       id: `reviewer-${reviewer.id}`,
       author: users.find((candidate) => candidate.id === reviewer.userId)?.name ?? reviewer.name,
-      role: "Reviewer",
+      role: reviewer.addedById && reviewer.addedById !== viewDoc.ownerId
+        ? `Reviewer (added by ${users.find((u) => u.id === reviewer.addedById)?.name ?? "approver"})`
+        : "Reviewer",
       timestamp: reviewer.reviewedAt!,
-      body: reviewer.reviewComment!,
+      body: reviewer.reviewComment?.trim() || "Review completed",
       action: "review" as const,
     })),
-    ...doc.steps
-      .filter((step) => step.comment && step.actedAt)
-      .map((step) => ({
-        id: step.id,
-        author:
-          users.find((candidate) => candidate.id === step.approverId)?.name ??
-          "Approver",
-        role: users.find((candidate) => candidate.id === step.approverId)?.designation,
-        timestamp: step.actedAt!,
-        body: step.comment!,
-        action:
-          step.status === "approved"
-            ? ("approved" as const)
-            : step.status === "rejected"
+    ...viewDoc.steps.flatMap((step) => {
+      const history = step.actionHistory?.length
+        ? step.actionHistory
+        : step.comment && step.actedAt
+          ? [{
+              id: step.id,
+              actorId: step.approverId,
+              actorName: undefined as string | undefined,
+              actionType: step.status,
+              comment: step.comment,
+              actedAt: step.actedAt,
+            }]
+          : [];
+
+      return history
+        .filter((entry) => entry.comment?.trim())
+        .map((entry) => {
+          const type = (entry.actionType ?? "").toLowerCase();
+          const action =
+            type.includes("reject") || step.status === "rejected"
               ? ("rejected" as const)
-              : step.status === "returned"
+              : type.includes("return") || step.status === "returned"
                 ? ("returned" as const)
-                : ("comment" as const),
-        attachmentName: step.attachmentName,
-      })),
+                : type.includes("approve") || step.status === "approved"
+                  ? ("approved" as const)
+                  : ("comment" as const);
+          return {
+            id: entry.id,
+            author:
+              entry.actorName ??
+              users.find((candidate) => candidate.id === entry.actorId)?.name ??
+              users.find((candidate) => candidate.id === step.approverId)?.name ??
+              "Approver",
+            role: users.find((candidate) => candidate.id === (entry.actorId || step.approverId))?.designation,
+            timestamp: entry.actedAt,
+            body: entry.comment!,
+            action,
+            attachmentName: step.attachmentName,
+          };
+        });
+    }),
   ];
 
   const beginEdit = (source: Document) => {
+    setSelectedRev(null);
     setEditSubject(source.subject);
     setEditBody(source.body || "");
     setEditAmount(source.amount != null ? String(source.amount) : "");
@@ -185,6 +244,7 @@ function DetailPage() {
         try {
           const revised = await wdas.reviseDocument(doc.id);
           qc.setQueryData(["doc", doc.id], revised);
+          void qc.invalidateQueries({ queryKey: ["doc", doc.id, "revisions"] });
           toast.success(`Opened as v${revised.revisionNumber ?? 2} — edit below, then resubmit.`);
           beginEdit(revised);
           return;
@@ -242,6 +302,7 @@ function DetailPage() {
       qc.setQueryData(["doc", doc.id], updated);
       void qc.invalidateQueries({ queryKey: ["docs"] });
       void qc.invalidateQueries({ queryKey: ["dashboard", "me"] });
+      void qc.invalidateQueries({ queryKey: ["doc", doc.id, "revisions"] });
       setEditing(false);
       setConfirmResubmit(false);
       toast.success(
@@ -295,16 +356,18 @@ function DetailPage() {
     const payload = {
       documentId: doc.id,
       archiveId: doc.archiveDocumentId ?? doc.refId,
-      subject: doc.subject,
+      subject: viewDoc.subject,
+      revisionNumber: viewDoc.revisionNumber ?? activeRev,
       status: doc.status,
-      steps: doc.steps,
+      steps: viewDoc.steps,
+      reviewers: viewDoc.reviewers,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `audit-${doc.id}.json`;
+    a.download = `audit-${doc.id}-v${viewDoc.revisionNumber ?? activeRev}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -372,11 +435,34 @@ function DetailPage() {
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-semibold">{doc.subject}</h1>
-                  <span className="rounded-md border bg-muted/60 px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
-                    v{doc.revisionNumber ?? 1}
-                  </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-semibold">{viewDoc.subject}</h1>
+                  <Select
+                    value={String(activeRev)}
+                    onValueChange={(v) => {
+                      const n = Number(v);
+                      setSelectedRev(n === currentRev ? null : n);
+                    }}
+                  >
+                    <SelectTrigger className="h-7 w-[7.5rem] font-mono text-xs">
+                      <SelectValue placeholder="Version" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(revisionsQ.data?.length
+                        ? revisionsQ.data
+                        : [{ revisionNumber: currentRev, isCurrent: true, subject: doc.subject }]
+                      ).map((rev) => (
+                        <SelectItem
+                          key={rev.revisionNumber}
+                          value={String(rev.revisionNumber)}
+                          className="font-mono text-xs"
+                        >
+                          v{rev.revisionNumber}
+                          {rev.isCurrent || rev.revisionNumber === currentRev ? " (current)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {isFinalized && (
                     <Lock className="h-4 w-4 text-muted-foreground" aria-label="Locked" />
                   )}
@@ -436,14 +522,15 @@ function DetailPage() {
                     variant="outline"
                     onClick={() => {
                       void downloadHtmlAsPdf({
-                        title: doc.subject,
-                        html: doc.body || "<p></p>",
+                        title: viewDoc.subject,
+                        html: viewDoc.body || "<p></p>",
                         meta: [
                           { label: "Owner", value: owner?.name ?? "" },
                           { label: "Ref", value: doc.refId ?? doc.id },
+                          { label: "Version", value: `v${viewDoc.revisionNumber ?? activeRev}` },
                           { label: "Status", value: doc.status },
                         ],
-                        fileName: doc.subject.trim() || "document",
+                        fileName: viewDoc.subject.trim() || "document",
                       }).then(
                         () => toast.success("PDF downloaded"),
                         (e) => toast.error((e as Error).message || "Could not download PDF"),
@@ -453,7 +540,7 @@ function DetailPage() {
                     <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
                   </Button>
                 )}
-                <PriorityBadge priority={doc.priority} />
+                <PriorityBadge priority={viewDoc.priority} />
                 <StatusBadge status={doc.status} />
                 <SlaBadge sla={doc.sla} />
               </>
@@ -461,6 +548,18 @@ function DetailPage() {
           </div>
         </div>
       </div>
+
+      {viewingHistorical && (
+        <div className="mx-6 mt-6 flex items-center gap-3 rounded-md border border-primary/25 bg-primary/5 px-4 py-3 text-sm">
+          <span className="flex-1">
+            Viewing <span className="font-mono font-medium">v{activeRev}</span> (read-only). Sequence chart,
+            review activity, and document content are for this version.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => setSelectedRev(null)}>
+            Back to v{currentRev}
+          </Button>
+        </div>
+      )}
 
       {isPendingCreatorSend && doc.ownerId === user.id && (
         <div className="mx-6 mt-6 space-y-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
@@ -577,7 +676,7 @@ function DetailPage() {
                 </p>
               </div>
               <span className="rounded border bg-muted/50 px-2 py-1 font-mono text-[10px] uppercase text-muted-foreground">
-                v{doc.revisionNumber ?? 1}
+                v{viewDoc.revisionNumber ?? activeRev}
               </span>
             </CardHeader>
             <CardContent className={showEditor ? "p-5" : "bg-muted/40 p-4 sm:p-8"}>
@@ -592,20 +691,24 @@ function DetailPage() {
                     setEditBody(isBodyEmpty(html) ? "" : html);
                   }}
                 />
+              ) : viewingHistorical && revisionDetailQ.isLoading ? (
+                <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading version…
+                </div>
               ) : (
                 <article className="mx-auto min-h-[680px] max-w-[760px] border border-border/80 bg-card px-8 py-10 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:px-12">
                   <div className="mb-8 border-b border-border pb-5">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                       Document record
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold tracking-tight">{doc.subject}</h2>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight">{viewDoc.subject}</h2>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {doc.refId ?? `Document ${doc.id.slice(0, 8)}`} · {owner?.name}
                     </p>
                   </div>
                   <div
                     className="wysiwyg-content text-sm"
-                    dangerouslySetInnerHTML={{ __html: doc.body }}
+                    dangerouslySetInnerHTML={{ __html: viewDoc.body }}
                   />
                 </article>
               )}
@@ -635,7 +738,7 @@ function DetailPage() {
                 label="Type"
                 value={workflow?.type === "financial" ? "Financial" : "Non-financial"}
               />
-              <Row label="Version" value={`v${doc.revisionNumber ?? 1}`} mono />
+              <Row label="Version" value={`v${viewDoc.revisionNumber ?? activeRev}`} mono />
               {showEditor ? (
                 <>
                   <div className="space-y-1.5 pt-1">
@@ -665,13 +768,13 @@ function DetailPage() {
                 </>
               ) : (
                 <>
-                  {doc.amount != null && <Row label="Amount" value={formatPKR(doc.amount)} mono />}
-                  <Row label="Priority" value={doc.priority} />
+                  {viewDoc.amount != null && <Row label="Amount" value={formatPKR(viewDoc.amount)} mono />}
+                  <Row label="Priority" value={viewDoc.priority} />
                 </>
               )}
               <Row label="Owner" value={owner?.name} />
               <Row label="Department" value={owner?.department} />
-              {doc.submittedAt && <Row label="Submitted" value={absTime(doc.submittedAt)} />}
+              {viewDoc.submittedAt && <Row label="Submitted" value={absTime(viewDoc.submittedAt)} />}
               {doc.finalizedAt && <Row label="Finalized" value={absTime(doc.finalizedAt)} />}
               {doc.cancelReason && <Row label="Cancel reason" value={doc.cancelReason} />}
             </CardContent>
@@ -681,11 +784,18 @@ function DetailPage() {
             <CardHeader className="border-b py-3">
               <CardTitle className="text-sm">Sequence chart</CardTitle>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Reviewers appear right after whoever added them.
+                Sequential routing for v{activeRev} only
+                {viewingHistorical ? " (this version)." : "."}
               </p>
             </CardHeader>
             <CardContent className="pt-4">
-              <ApprovalFlowChart nodes={buildDocumentFlowNodes(doc, users)} mode="sequential" />
+              {revisionDetailQ.isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading version routing…
+                </div>
+              ) : (
+                <ApprovalFlowChart nodes={buildDocumentFlowNodes(viewDoc, users)} mode="sequential" />
+              )}
             </CardContent>
           </Card>
 
@@ -697,9 +807,15 @@ function DetailPage() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-6 pt-5">
-              <WorkflowStepper steps={doc.steps} currentStepId={doc.currentStepId} compact />
+              <WorkflowStepper
+                steps={viewDoc.steps}
+                currentStepId={viewDoc.currentStepId}
+                reviewers={viewDoc.reviewers}
+                ownerId={viewDoc.ownerId}
+                compact
+              />
               <CommentThread comments={activityComments} />
-              <ApprovalTrail steps={doc.steps} currentStepId={doc.currentStepId} />
+              <ApprovalTrail steps={viewDoc.steps} currentStepId={viewDoc.currentStepId} />
             </CardContent>
           </Card>
 

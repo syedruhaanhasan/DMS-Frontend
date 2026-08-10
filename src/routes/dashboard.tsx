@@ -56,7 +56,7 @@ import { DelegationBanner } from "@/components/wdas/delegation-banner";
 import { useSession } from "@/lib/wdas/role-context";
 import { useCanFetchDocuments } from "@/lib/wdas/use-document-query";
 import { refreshWorkflowViews } from "@/lib/wdas/refresh-workflow-queries";
-import { relTime } from "@/lib/wdas/format";
+import { parseApiDate, relTime } from "@/lib/wdas/format";
 import { wdas } from "@/services/wdas";
 import { api } from "@/lib/api/client";
 import type { ApiBottleneckReportDto, ApiSuccessMetricsDto, ApiVolumeTrendReportDto } from "@/lib/api/types";
@@ -217,7 +217,7 @@ function VeriFlowDashboard() {
 
   const isSameDay = (iso?: string) => {
     if (!iso) return false;
-    const d = new Date(iso);
+    const d = parseApiDate(iso);
     return (
       d.getFullYear() === now.getFullYear() &&
       d.getMonth() === now.getMonth() &&

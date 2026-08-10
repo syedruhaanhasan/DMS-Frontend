@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Inbox, FileText, FilePlus, FolderSearch,
   BarChart3, Search, ChevronLeft, ChevronRight, LogOut, Settings,
   Workflow as WorkflowIcon, GitBranch, Mail, UserPlus, ChevronDown, UserCog, Building2, Network, FileType,
-  Sun, Moon, Plus, Shield, ScrollText, IdCard, Eye,
+  Sun, Moon, Shield, ScrollText, IdCard, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, ROLE_LABEL, isSuperAdmin } from "@/lib/wdas/role-context";
@@ -248,15 +248,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex-1" />
-
-          {!superAdminView && (
-            <Button asChild variant="default" size="sm" className="hidden h-9 gap-2 rounded-lg bg-primary text-primary-foreground shadow-none hover:bg-primary-hover md:inline-flex">
-              <Link to="/documents/new">
-                <Plus className="h-4 w-4" />
-                Quick create
-              </Link>
-            </Button>
-          )}
 
           {availableRoles.length > 1 && (
             <DropdownMenu>

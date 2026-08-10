@@ -11,6 +11,7 @@ import { StatusBadge, SlaBadge, PriorityBadge } from "@/components/wdas/badges";
 import { ApprovalTrail } from "@/components/wdas/approval-trail";
 import { ApprovalFlowChart, buildDocumentFlowNodes } from "@/components/wdas/approval-flow-chart";
 import { WorkflowStepper } from "@/components/wdas/workflow-stepper";
+import { scopeDocumentToCycle } from "@/lib/api/mappers";
 import { CommentThread } from "@/components/wdas/comment-thread";
 import { AttachmentList } from "@/components/wdas/attachments";
 import { LoadingState, ErrorState } from "@/components/wdas/data-states";
@@ -77,6 +78,8 @@ function ReviewPage() {
   }
 
   const doc = q.data;
+  const routingCycle = Math.max(1, ...doc.steps.map((s) => s.approvalCycle ?? 1));
+  const routingDoc = scopeDocumentToCycle(doc, routingCycle);
   const currentStep = doc.steps.find((s) => s.id === doc.currentStepId);
   const reviewers = doc.reviewers ?? [];
   const myReviewerRecord = reviewers.find((r) => r.userId === user.id);
@@ -98,33 +101,58 @@ function ReviewPage() {
   );
   const activityComments = [
     ...(doc.reviewers ?? [])
-      .filter((r) => r.reviewComment?.trim() && r.reviewedAt)
+      .filter((r) => Boolean(r.reviewedAt))
       .map((r) => ({
         id: `reviewer-${r.id}`,
         author: users.find((u) => u.id === r.userId)?.name ?? r.name,
-        role: "Reviewer",
+        role: r.addedById && r.addedById !== doc.ownerId
+          ? `Reviewer (added by ${users.find((u) => u.id === r.addedById)?.name ?? "approver"})`
+          : "Reviewer",
         timestamp: r.reviewedAt!,
-        body: r.reviewComment!,
+        body: r.reviewComment?.trim() || "Review completed",
         action: "review" as const,
       })),
-    ...doc.steps
-      .filter((s) => s.comment && s.actedAt)
-      .map((s) => ({
-        id: s.id,
-        author: users.find((u) => u.id === s.approverId)?.name ?? "Approver",
-        role: users.find((u) => u.id === s.approverId)?.designation,
-        timestamp: s.actedAt!,
-        body: s.comment!,
-        action:
-          s.status === "approved"
-            ? ("approved" as const)
-            : s.status === "rejected"
+    ...doc.steps.flatMap((step) => {
+      const history = step.actionHistory?.length
+        ? step.actionHistory
+        : step.comment && step.actedAt
+          ? [{
+              id: step.id,
+              actorId: step.approverId,
+              actorName: undefined as string | undefined,
+              actionType: step.status,
+              comment: step.comment,
+              actedAt: step.actedAt,
+            }]
+          : [];
+
+      return history
+        .filter((entry) => entry.comment?.trim())
+        .map((entry) => {
+          const type = (entry.actionType ?? "").toLowerCase();
+          const action =
+            type.includes("reject") || step.status === "rejected"
               ? ("rejected" as const)
-              : s.status === "returned"
+              : type.includes("return") || step.status === "returned"
                 ? ("returned" as const)
-                : ("comment" as const),
-        attachmentName: s.attachmentName,
-      })),
+                : type.includes("approve") || step.status === "approved"
+                  ? ("approved" as const)
+                  : ("comment" as const);
+          return {
+            id: entry.id,
+            author:
+              entry.actorName ??
+              users.find((u) => u.id === entry.actorId)?.name ??
+              users.find((u) => u.id === step.approverId)?.name ??
+              "Approver",
+            role: users.find((u) => u.id === (entry.actorId || step.approverId))?.designation,
+            timestamp: entry.actedAt,
+            body: entry.comment!,
+            action,
+            attachmentName: step.attachmentName,
+          };
+        });
+    }),
   ];
   const canComment = isYourTurn || isGatedReview;
   const reviewerOnly = isGatedReview || (isReviewer && !isYourTurn);
@@ -418,7 +446,13 @@ function ReviewPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-5">
-              <WorkflowStepper steps={doc.steps} currentStepId={doc.currentStepId} compact />
+              <WorkflowStepper
+                steps={routingDoc.steps}
+                currentStepId={routingDoc.currentStepId}
+                reviewers={routingDoc.reviewers}
+                ownerId={doc.ownerId}
+                compact
+              />
             </CardContent>
           </Card>
 
@@ -426,11 +460,11 @@ function ReviewPage() {
             <CardHeader className="border-b py-3">
               <CardTitle className="text-sm">Sequence chart</CardTitle>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Each reviewer appears right after whoever added them.
+                Current version sequential routing — reviewers appear after who added them.
               </p>
             </CardHeader>
             <CardContent className="pt-4">
-              <ApprovalFlowChart nodes={buildDocumentFlowNodes(doc, users)} mode="sequential" />
+              <ApprovalFlowChart nodes={buildDocumentFlowNodes(routingDoc, users)} mode="sequential" />
             </CardContent>
           </Card>
 

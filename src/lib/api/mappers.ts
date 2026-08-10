@@ -23,9 +23,10 @@ import type {
   Workflow,
   AppRole,
 } from "@/lib/wdas/types";
+import { parseApiDate, toUtcIso } from "@/lib/wdas/format";
 
 function daysSince(iso: string): number {
-  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+  return Math.max(0, Math.floor((Date.now() - parseApiDate(iso).getTime()) / 86400000));
 }
 
 /** API entity IDs are strings in JSON but may arrive as numbers in edge cases. */
@@ -219,6 +220,8 @@ function mapStepStatus(status: ApiWorkflowStepStatus): ApprovalStep["status"] {
       return "returned";
     case "Skipped":
       return "skipped";
+    case "Paused":
+      return "paused";
     default:
       return "pending";
   }
@@ -241,9 +244,18 @@ function mapStep(step: ApiWorkflowStepDto): ApprovalStep {
     id: apiId(step.id),
     approverId: apiId(step.approverUserId),
     order: step.stepOrder,
+    approvalCycle: step.approvalCycle && step.approvalCycle > 0 ? step.approvalCycle : 1,
     status: mapStepStatus(step.status),
-    actedAt: step.completedAtUtc ?? lastAction?.actionAtUtc,
+    actedAt: toUtcIso(step.completedAtUtc ?? lastAction?.actionAtUtc),
     comment: lastAction?.comment ?? undefined,
+    actionHistory: actions.map((a) => ({
+      id: apiId(a.id),
+      actorId: apiId(a.actorUserId),
+      actorName: a.actorDisplayName,
+      actionType: a.actionType,
+      comment: a.comment ?? undefined,
+      actedAt: toUtcIso(a.actionAtUtc) ?? a.actionAtUtc,
+    })),
   };
 }
 
@@ -272,8 +284,11 @@ export function mapDocument(
 ): Document {
   const workflowSteps = dto.workflowSteps ?? [];
   const steps = workflowSteps.map(mapStep);
-  const activeStep = workflowSteps.find((s) => s.status === "Active");
-  const submitted = dto.submittedAtUtc ?? workflowSteps[0]?.activatedAtUtc;
+  const activeStep =
+    workflowSteps.find((s) => s.status === "Active") ??
+    workflowSteps.find((s) => s.status === "Paused");
+  const submitted =
+    toUtcIso(dto.submittedAtUtc) ?? toUtcIso(workflowSteps[0]?.activatedAtUtc);
   const createdAt = submitted ?? new Date().toISOString();
 
   return {
@@ -288,33 +303,110 @@ export function mapDocument(
     priority: mapPriority(dto.priority),
     status: mapDocStatus(dto.status),
     createdAt,
-    submittedAt: dto.submittedAtUtc ?? undefined,
+    submittedAt: submitted,
     daysPending: submitted ? daysSince(submitted) : 0,
     sla: mapSla(activeStep?.isSlaBreached ? "Overdue" : "OnTime", activeStep?.isSlaBreached),
     currentStepId: apiIdOpt(activeStep?.id),
     steps,
     attachments,
-    reviewers: (dto.recipients ?? []).map((r) => ({
-      id: apiId(r.id),
-      name: r.recipientName,
-      email: r.recipientEmail ?? undefined,
-      userId: r.reviewerUserId ? apiId(r.reviewerUserId) : undefined,
-      addedById: r.addedById ? apiId(r.addedById) : undefined,
-      reviewedAt: r.reviewedAtUtc ?? undefined,
-      reviewComment: r.reviewComment ?? undefined,
-    })),
+    reviewers: (dto.recipients ?? [])
+      .filter((r) => Boolean(r.reviewerUserId))
+      .map((r) => ({
+        id: apiId(r.id),
+        name: r.recipientName,
+        email: r.recipientEmail ?? undefined,
+        userId: r.reviewerUserId ? apiId(r.reviewerUserId) : undefined,
+        addedById: r.addedById ? apiId(r.addedById) : undefined,
+        returnWorkflowStepId: r.returnWorkflowStepId ? apiId(r.returnWorkflowStepId) : undefined,
+        reviewedAt: toUtcIso(r.reviewedAtUtc),
+        reviewComment: r.reviewComment ?? undefined,
+      })),
     downloadAllowedUserIds: (dto.downloadAllowedUserIds ?? []).map(apiId),
     refId: documentRefId(dto.recordNumber),
     recordNumber: dto.recordNumber,
     revisionNumber: dto.revisionNumber && dto.revisionNumber > 0 ? dto.revisionNumber : 1,
     archiveDocumentId: dto.archiveDocumentId ?? undefined,
-    finalizedAt: dto.finalizedAtUtc ?? undefined,
+    finalizedAt: toUtcIso(dto.finalizedAtUtc),
     cancelReason: dto.cancellationReason ?? undefined,
   };
 }
 
+/** Overlay a revision snapshot onto the live document shell (ids, attachments, owner). */
+export function applyDocumentRevision(
+  base: Document,
+  rev: import("@/lib/api/types").ApiDocumentRevisionDetailDto,
+): Document {
+  const workflowSteps = rev.workflowSteps ?? [];
+  const steps = workflowSteps.map(mapStep);
+  const activeStep =
+    workflowSteps.find((s) => s.status === "Active") ??
+    workflowSteps.find((s) => s.status === "Paused");
+  const submitted = toUtcIso(rev.submittedAtUtc) ?? base.submittedAt;
+
+  const overlaid: Document = {
+    ...base,
+    subject: rev.subject,
+    body: rev.bodyHtml,
+    amount: rev.amount ?? undefined,
+    priority: mapPriority(rev.priority),
+    revisionNumber: rev.revisionNumber,
+    submittedAt: submitted,
+    daysPending: submitted ? daysSince(submitted) : base.daysPending,
+    currentStepId: rev.isCurrent ? base.currentStepId : apiIdOpt(activeStep?.id),
+    steps,
+    reviewers: (rev.recipients ?? [])
+      .filter((r) => Boolean(r.reviewerUserId))
+      .map((r) => ({
+        id: apiId(r.id),
+        name: r.recipientName,
+        email: r.recipientEmail ?? undefined,
+        userId: r.reviewerUserId ? apiId(r.reviewerUserId) : undefined,
+        addedById: r.addedById ? apiId(r.addedById) : undefined,
+        returnWorkflowStepId: r.returnWorkflowStepId ? apiId(r.returnWorkflowStepId) : undefined,
+        reviewedAt: toUtcIso(r.reviewedAtUtc),
+        reviewComment: r.reviewComment ?? undefined,
+      })),
+  };
+
+  // Current version: keep live content; routing/activity always come from this revision's cycle.
+  if (rev.isCurrent) {
+    return {
+      ...overlaid,
+      subject: base.subject,
+      body: base.body,
+      amount: base.amount,
+      priority: base.priority,
+      status: base.status,
+      currentStepId: base.currentStepId,
+    };
+  }
+
+  return overlaid;
+}
+
+/** Limit steps/reviewers to a single approval cycle (one version's sequential routing). */
+export function scopeDocumentToCycle(doc: Document, approvalCycle: number): Document {
+  const cycle = approvalCycle > 0 ? approvalCycle : 1;
+  const steps = doc.steps.filter((s) => (s.approvalCycle ?? 1) === cycle);
+  const stepIds = new Set(steps.map((s) => s.id));
+  const reviewers = (doc.reviewers ?? []).filter((r) => {
+    if (r.returnWorkflowStepId) return stepIds.has(r.returnWorkflowStepId);
+    // Creator-gated reviewers belong with the cycle that is currently in play.
+    return true;
+  });
+  const active =
+    steps.find((s) => s.status === "pending" && s.id === doc.currentStepId) ??
+    steps.find((s) => s.status === "paused");
+  return {
+    ...doc,
+    steps,
+    reviewers,
+    currentStepId: active?.id ?? (stepIds.has(doc.currentStepId ?? "") ? doc.currentStepId : undefined),
+  };
+}
+
 export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: string): Document {
-  const submitted = dto.submittedAtUtc ?? new Date().toISOString();
+  const submitted = toUtcIso(dto.submittedAtUtc) ?? new Date().toISOString();
   return {
     id: apiId(dto.documentId),
     refId: documentRefId(dto.recordNumber),
@@ -327,8 +419,8 @@ export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: str
     priority: "Normal",
     status: mapDocStatus(dto.status),
     createdAt: submitted,
-    submittedAt: dto.submittedAtUtc ?? undefined,
-    daysPending: dto.submittedAtUtc ? daysSince(dto.submittedAtUtc) : 0,
+    submittedAt: toUtcIso(dto.submittedAtUtc),
+    daysPending: dto.submittedAtUtc ? daysSince(submitted) : 0,
     sla: mapSla(dto.slaClassification, dto.isSlaBreached),
     currentStepId: apiIdOpt(dto.activeStepId),
     steps: [],
@@ -339,7 +431,7 @@ export function mapDashboardItem(dto: ApiDashboardDocumentItemDto, ownerId?: str
 }
 
 export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
-  const submitted = dto.submittedAtUtc ?? new Date().toISOString();
+  const submitted = toUtcIso(dto.submittedAtUtc) ?? new Date().toISOString();
   const actions = dto.actions ?? [];
   const steps = actions.map((a, index) => {
     const actionType = (a.actionType ?? "").toLowerCase();
@@ -354,7 +446,7 @@ export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
       approverId: apiId(a.actorUserId),
       order: index + 1,
       status,
-      actedAt: a.actionAtUtc,
+      actedAt: toUtcIso(a.actionAtUtc),
       comment: a.comment ?? undefined,
       actorName: a.actorDisplayName,
       actionType: a.actionType,
@@ -376,8 +468,8 @@ export function mapSearchItem(dto: ApiSearchResultItemDto): Document {
     priority: "Normal",
     status: mapDocStatus(dto.status),
     createdAt: submitted,
-    submittedAt: dto.submittedAtUtc ?? undefined,
-    daysPending: dto.submittedAtUtc ? daysSince(dto.submittedAtUtc) : 0,
+    submittedAt: toUtcIso(dto.submittedAtUtc),
+    daysPending: dto.submittedAtUtc ? daysSince(submitted) : 0,
     sla: "on_time",
     steps,
     attachments: [],

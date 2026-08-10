@@ -140,7 +140,8 @@ export interface ApprovalStep {
   id: string;
   approverId: string;
   order: number;
-  status: "pending" | "approved" | "rejected" | "returned" | "skipped";
+  approvalCycle?: number;
+  status: "pending" | "approved" | "rejected" | "returned" | "skipped" | "paused";
   actedAt?: string;
   comment?: string;
   attachmentName?: string;
@@ -150,6 +151,15 @@ export interface ApprovalStep {
   /** History feed extras */
   actorName?: string;
   actionType?: string;
+  /** All actions on this step (approve/reject/comment), oldest → newest */
+  actionHistory?: Array<{
+    id: string;
+    actorId: string;
+    actorName?: string;
+    actionType: string;
+    comment?: string;
+    actedAt: string;
+  }>;
 }
 
 export interface Attachment {
@@ -199,6 +209,8 @@ export interface DocumentReviewer {
   userId?: string;
   /** User who added this reviewer (creator at creation, or an approver during approval). */
   addedById?: string;
+  /** Workflow step that paused for an approver-added reviewer. */
+  returnWorkflowStepId?: string;
   reviewedAt?: string;
   reviewComment?: string;
 }
