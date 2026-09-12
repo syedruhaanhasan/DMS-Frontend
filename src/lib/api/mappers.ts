@@ -254,6 +254,7 @@ function mapStep(step: ApiWorkflowStepDto): ApprovalStep {
       actorName: a.actorDisplayName,
       actionType: a.actionType,
       comment: a.comment ?? undefined,
+      selectedText: a.selectedText ?? undefined,
       actedAt: toUtcIso(a.actionAtUtc) ?? a.actionAtUtc,
     })),
   };
@@ -320,6 +321,7 @@ export function mapDocument(
         returnWorkflowStepId: r.returnWorkflowStepId ? apiId(r.returnWorkflowStepId) : undefined,
         reviewedAt: toUtcIso(r.reviewedAtUtc),
         reviewComment: r.reviewComment ?? undefined,
+        reviewSelectedText: r.reviewSelectedText ?? undefined,
       })),
     downloadAllowedUserIds: (dto.downloadAllowedUserIds ?? []).map(apiId),
     refId: documentRefId(dto.recordNumber),

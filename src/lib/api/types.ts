@@ -179,6 +179,7 @@ export interface ApiWorkflowStepActionDto {
   actorDisplayName: string;
   actionType: ApiWorkflowActionType;
   comment: string | null;
+  selectedText: string | null;
   actionAtUtc: string;
 }
 
@@ -205,6 +206,7 @@ export interface ApiDocumentRecipientDto {
   addedById?: string | null;
   reviewedAtUtc?: string | null;
   reviewComment?: string | null;
+  reviewSelectedText?: string | null;
   returnWorkflowStepId?: string | null;
 }
 

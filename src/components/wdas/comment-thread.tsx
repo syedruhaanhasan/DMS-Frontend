@@ -10,6 +10,7 @@ export interface CommentEntry {
   role?: string;
   timestamp: string;
   body: string;
+  selectedText?: string;
   action?: CommentAction;
   attachmentName?: string;
 }
@@ -26,10 +27,11 @@ const ACTION_META: Record<CommentAction, { icon: typeof Check; color: string; la
 interface Props {
   comments: CommentEntry[];
   className?: string;
+  onQuoteClick?: (selectedText: string) => void;
 }
 
 /** Chronological comment thread with approver actions and timestamps. */
-export function CommentThread({ comments, className }: Props) {
+export function CommentThread({ comments, className, onQuoteClick }: Props) {
   const sorted = [...comments].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
@@ -89,6 +91,16 @@ export function CommentThread({ comments, className }: Props) {
                 </span>
               )}
               <p className="mt-2.5 text-sm leading-relaxed text-foreground/90">{c.body}</p>
+              {c.selectedText && (
+                <button
+                  type="button"
+                  className="mt-3 block w-full border-l-2 border-primary/60 bg-primary/5 px-3 py-2 text-left text-xs italic text-muted-foreground hover:bg-primary/10"
+                  onClick={() => onQuoteClick?.(c.selectedText!)}
+                  title="Locate highlighted text in the document"
+                >
+                  “{c.selectedText}”
+                </button>
+              )}
               {c.attachmentName && (
                 <p className="mt-2 text-xs text-muted-foreground">Attachment: {c.attachmentName}</p>
               )}

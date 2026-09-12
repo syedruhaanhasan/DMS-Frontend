@@ -194,6 +194,7 @@ function DetailPage() {
               actorName: undefined as string | undefined,
               actionType: step.status,
               comment: step.comment,
+              selectedText: undefined,
               actedAt: step.actedAt,
             }]
           : [];
@@ -220,6 +221,7 @@ function DetailPage() {
             role: users.find((candidate) => candidate.id === (entry.actorId || step.approverId))?.designation,
             timestamp: entry.actedAt,
             body: entry.comment!,
+            selectedText: entry.selectedText,
             action,
             attachmentName: step.attachmentName,
           };

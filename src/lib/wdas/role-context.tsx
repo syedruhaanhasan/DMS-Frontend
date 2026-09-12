@@ -3,7 +3,7 @@ import { api, setToken, setUnauthorizedHandler } from "@/lib/api/client";
 import type { ApiLoginResponse, ApiUserSummaryDto } from "@/lib/api/types";
 import { mapUser, pickPrimaryRole, mapApiRole } from "@/lib/api/mappers";
 import type { Role, User, Department } from "./types";
-import { ROUTE_PERMISSIONS, expandImpliedPermissions } from "./permissions";
+import { P, ROUTE_PERMISSIONS, expandImpliedPermissions } from "./permissions";
 import { isAdAccount } from "./ad-settings";
 import { wdasConfig } from "@/services/wdas-config";
 
@@ -208,6 +208,9 @@ export function canAccessNavItem(itemRoles: Role[], availableRoles: Role[]): boo
 }
 
 export function requiredPermissionForPath(pathname: string): string | null {
+  if (/^\/documents\/\d+\/review(?:\/|$)/.test(pathname)) {
+    return P.nav.inbox;
+  }
   for (const entry of ROUTE_PERMISSIONS) {
     if (pathname === entry.prefix || pathname.startsWith(entry.prefix + "/")) {
       return entry.permission;

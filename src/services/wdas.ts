@@ -243,6 +243,7 @@ export const wdas = {
     comment: string,
     actorId?: string,
     preferredStepId?: string,
+    selectedText?: string,
   ): Promise<Document> => {
     const doc = await wdas.getDocument(id);
     // Prefer the caller's own active step (parallel / multi-approver), then inbox step id, then first active.
@@ -256,7 +257,10 @@ export const wdas = {
     if (!stepId) throw new Error("No active approval step on this document.");
 
     const path = `/api/workflow-steps/${stepId}/${action}`;
-    const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(path, { comment: comment || null });
+    const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(path, {
+      comment: comment || null,
+      selectedText: selectedText || null,
+    });
     return mapDocument(dto);
   },
 
@@ -270,10 +274,10 @@ export const wdas = {
   },
 
   /** Reviewer completes creator-gated review; document returns to owner when all reviewers finish. */
-  completeReviewerReview: async (id: string, comment?: string): Promise<Document> => {
+  completeReviewerReview: async (id: string, comment?: string, selectedText?: string): Promise<Document> => {
     const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(
       `/api/documents/${id}/complete-review`,
-      { comment: comment ?? null },
+      { comment: comment ?? null, selectedText: selectedText || null },
     );
     return mapDocument(dto);
   },
@@ -286,13 +290,13 @@ export const wdas = {
     return mapDocument(dto);
   },
 
-  commentOnDocument: async (id: string, comment: string): Promise<Document> => {
+  commentOnDocument: async (id: string, comment: string, selectedText?: string): Promise<Document> => {
     const doc = await wdas.getDocument(id);
     const stepId = doc.currentStepId;
     if (!stepId) throw new Error("No active approval step on this document.");
     const dto = await api.post<import("@/lib/api/types").ApiDocumentDto>(
       `/api/workflow-steps/${stepId}/comment`,
-      { comment: comment || null },
+      { comment: comment || null, selectedText: selectedText || null },
     );
     return mapDocument(dto);
   },

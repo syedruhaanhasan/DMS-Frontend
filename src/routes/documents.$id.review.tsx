@@ -55,6 +55,7 @@ function ReviewPage() {
   const q = useDocumentQuery(id);
   const owner = useUserById(q.data?.ownerId);
   const [comment, setComment] = useState("");
+  const [selectedText, setSelectedText] = useState("");
   const [confirm, setConfirm] = useState<"approve" | "reject" | "return" | null>(null);
   const [reviewerQuery, setReviewerQuery] = useState("");
   const [reviewerFocused, setReviewerFocused] = useState(false);
@@ -63,6 +64,49 @@ function ReviewPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLElement>(null);
+
+  const highlightDocumentHtml = (html: string, quotes: string[]) => {
+    if (!html || typeof DOMParser === "undefined") return html;
+    const root = new DOMParser().parseFromString(html, "text/html").body;
+    for (const quote of [...new Set(quotes.map((value) => value.trim()).filter(Boolean))]) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const textNodes: Text[] = [];
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (node.parentElement?.closest("script, style, mark")) continue;
+        textNodes.push(node as Text);
+      }
+      for (const textNode of textNodes) {
+        const index = textNode.data.indexOf(quote);
+        if (index < 0) continue;
+        const mark = document.createElement("mark");
+        mark.className = "comment-highlight rounded-sm bg-primary/35 px-0.5 text-foreground";
+        mark.dataset.commentText = quote;
+        mark.title = "Commented text";
+        const fragment = document.createDocumentFragment();
+        fragment.append(textNode.data.slice(0, index), mark, textNode.data.slice(index + quote.length));
+        mark.textContent = quote;
+        textNode.replaceWith(fragment);
+      }
+    }
+    return root.innerHTML;
+  };
+
+  const captureSelection = () => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim() ?? "";
+    if (!selection || !text || !previewRef.current || selection.rangeCount === 0) {
+      setSelectedText("");
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    if (previewRef.current.contains(range.commonAncestorContainer)) {
+      setSelectedText(text);
+    } else {
+      setSelectedText("");
+    }
+  };
 
   useEffect(() => {
     if (q.data && user.id && q.data.ownerId === user.id) {
@@ -110,6 +154,7 @@ function ReviewPage() {
           : "Reviewer",
         timestamp: r.reviewedAt!,
         body: r.reviewComment?.trim() || "Review completed",
+        selectedText: r.reviewSelectedText ?? undefined,
         action: "review" as const,
       })),
     ...doc.steps.flatMap((step) => {
@@ -122,6 +167,7 @@ function ReviewPage() {
               actorName: undefined as string | undefined,
               actionType: step.status,
               comment: step.comment,
+              selectedText: undefined,
               actedAt: step.actedAt,
             }]
           : [];
@@ -148,12 +194,22 @@ function ReviewPage() {
             role: users.find((u) => u.id === (entry.actorId || step.approverId))?.designation,
             timestamp: entry.actedAt,
             body: entry.comment!,
+            selectedText: entry.selectedText,
             action,
             attachmentName: step.attachmentName,
           };
         });
     }),
   ];
+  const highlightedBody = highlightDocumentHtml(
+    doc.body,
+    activityComments.map((entry) => entry.selectedText ?? ""),
+  );
+  const locateQuote = (quote: string) => {
+    const target = Array.from(previewRef.current?.querySelectorAll("mark.comment-highlight") ?? [])
+      .find((element) => element.getAttribute("data-comment-text") === quote);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
   const canComment = isYourTurn || isGatedReview;
   const reviewerOnly = isGatedReview || (isReviewer && !isYourTurn);
   const alreadyAddedByMe = reviewers.some((r) => r.addedById === user.id);
@@ -222,9 +278,11 @@ function ReviewPage() {
     }
     setCompletingReview(true);
     try {
-      const updated = await wdas.completeReviewerReview(doc.id, comment);
+      const updated = await wdas.completeReviewerReview(doc.id, comment, selectedText);
       await refreshWorkflowViews(qc, { userId: user.id, document: updated });
       setComment("");
+      setSelectedText("");
+      window.getSelection()?.removeAllRanges();
       toast.success(
         updated.status === "pending"
           ? "Review completed — document returned to approver"
@@ -248,9 +306,11 @@ function ReviewPage() {
       return;
     }
     try {
-      const updated = await wdas.commentOnDocument(doc.id, comment);
+      const updated = await wdas.commentOnDocument(doc.id, comment, selectedText);
       await refreshWorkflowViews(qc, { userId: user.id, document: updated });
       setComment("");
+      setSelectedText("");
+      window.getSelection()?.removeAllRanges();
       toast.success("Comment saved");
     } catch (e) {
       toast.error((e as Error).message);
@@ -281,7 +341,7 @@ function ReviewPage() {
       return;
     }
     try {
-      const updated = await wdas.actOnDocument(doc.id, confirm, note, user.id);
+      const updated = await wdas.actOnDocument(doc.id, confirm, note, user.id, undefined, selectedText);
       await refreshWorkflowViews(qc, { userId: user.id, document: updated });
       toast.success(
         confirm === "approve"
@@ -407,7 +467,11 @@ function ReviewPage() {
               </div>
             </CardHeader>
             <CardContent className="bg-muted/40 p-4 sm:p-8">
-              <article className="mx-auto min-h-[680px] max-w-[760px] border border-border/80 bg-card px-8 py-10 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:px-12">
+                <article
+                  ref={previewRef}
+                  onMouseUp={captureSelection}
+                  className="mx-auto min-h-[680px] max-w-[760px] border border-border/80 bg-card px-8 py-10 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:px-12"
+                >
                 <div className="mb-8 border-b border-border pb-5">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                     Approval document
@@ -419,7 +483,7 @@ function ReviewPage() {
                 </div>
                 <div
                   className="wysiwyg-content text-sm"
-                  dangerouslySetInnerHTML={{ __html: doc.body }}
+                    dangerouslySetInnerHTML={{ __html: highlightedBody }}
                 />
               </article>
             </CardContent>
@@ -561,7 +625,7 @@ function ReviewPage() {
               <CardTitle className="text-sm">Review activity</CardTitle>
             </CardHeader>
             <CardContent className="max-h-[340px] space-y-6 overflow-y-auto pt-4">
-              <CommentThread comments={activityComments} />
+              <CommentThread comments={activityComments} onQuoteClick={locateQuote} />
               <ApprovalTrail steps={doc.steps} currentStepId={doc.currentStepId} />
             </CardContent>
           </Card>
@@ -610,6 +674,11 @@ function ReviewPage() {
                     onChange={(e) => setComment(e.target.value)}
                     disabled={!canComment}
                   />
+                  {selectedText && (
+                    <div className="border-l-2 border-primary/60 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Commenting on:</span> “{selectedText}”
+                    </div>
+                  )}
                 </div>
                 {!reviewerOnly && (
                   <div className="space-y-2">

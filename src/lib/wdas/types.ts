@@ -158,6 +158,7 @@ export interface ApprovalStep {
     actorName?: string;
     actionType: string;
     comment?: string;
+    selectedText?: string;
     actedAt: string;
   }>;
 }
@@ -213,6 +214,7 @@ export interface DocumentReviewer {
   returnWorkflowStepId?: string;
   reviewedAt?: string;
   reviewComment?: string;
+  reviewSelectedText?: string;
 }
 
 /* ============== External approvers & Delegation ============== */
